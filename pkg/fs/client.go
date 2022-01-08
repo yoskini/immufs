@@ -26,7 +26,7 @@ func marshalDirents(dirent []fuseutil.Dirent) ([]byte, error) {
 
 func unmarshalDirents(data []byte) ([]fuseutil.Dirent, error) {
 	var ret []fuseutil.Dirent
-	err := json.Unmarshal(data, ret)
+	err := json.Unmarshal(data, &ret)
 
 	return ret, err
 }
