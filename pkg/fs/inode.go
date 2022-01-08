@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"time"
@@ -299,22 +300,22 @@ func (in *Inode) ReadDir(p []byte, offset int) int {
 	return n
 }
 
-/*
 // Read from the file's contents. See documentation for ioutil.ReaderAt.
 //
 // REQUIRES: in.isFile()
-func (in *inode) ReadAt(p []byte, off int64) (int, error) {
+func (in *Inode) ReadAt(p []byte, off int64) (int, error) {
 	if !in.isFile() {
 		panic("ReadAt called on non-file.")
 	}
 
+	content := in.readContentOrDie()
 	// Ensure the offset is in range.
-	if off > int64(len(in.contents)) {
+	if off > int64(len(content)) {
 		return 0, io.EOF
 	}
 
 	// Read what we can.
-	n := copy(p, in.contents[off:])
+	n := copy(p, content[off:])
 	if n < len(p) {
 		return n, io.EOF
 	}
@@ -325,33 +326,37 @@ func (in *inode) ReadAt(p []byte, off int64) (int, error) {
 // Write to the file's contents. See documentation for ioutil.WriterAt.
 //
 // REQUIRES: in.isFile()
-func (in *inode) WriteAt(p []byte, off int64) (int, error) {
+func (in *Inode) WriteAt(p []byte, off int64) (int, error) {
 	if !in.isFile() {
 		panic("WriteAt called on non-file.")
 	}
 
 	// Update the modification time.
-	in.attrs.Mtime = time.Now()
+	in.Mtime = time.Now()
+	content := in.readContentOrDie()
 
 	// Ensure that the contents slice is long enough.
 	newLen := int(off) + len(p)
-	if len(in.contents) < newLen {
-		padding := make([]byte, newLen-len(in.contents))
-		in.contents = append(in.contents, padding...)
-		in.attrs.Size = uint64(newLen)
+	if len(content) < newLen {
+		padding := make([]byte, newLen-len(content))
+		content = append(content, padding...)
+		in.Size = int64(newLen)
 	}
 
 	// Copy in the data.
-	n := copy(in.contents[off:], p)
+	n := copy(content[off:], p)
 
 	// Sanity check.
 	if n != len(p) {
 		panic(fmt.Sprintf("Unexpected short copy: %v", n))
 	}
 
+	in.writeContentOrDie(content)
+	in.writeOrDie()
+
 	return n, nil
 }
-*/
+
 // Update attributes from non-nil parameters.
 func (in *Inode) SetAttributes(
 	size *uint64,

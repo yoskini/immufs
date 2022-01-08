@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"immufs/pkg/config"
+	"io"
 	"os"
 	"sync"
 	"syscall"
@@ -538,7 +539,6 @@ func (fs *Immufs) OpenDir(
 	return nil
 }
 
-/*
 func (fs *Immufs) ReadDir(
 	ctx context.Context,
 	op *fuseops.ReadDirOp) error {
@@ -558,6 +558,7 @@ func (fs *Immufs) ReadDir(
 	return nil
 }
 
+// TODO should I implement a file handler?
 func (fs *Immufs) OpenFile(
 	ctx context.Context,
 	op *fuseops.OpenFileOp) error {
@@ -625,6 +626,7 @@ func (fs *Immufs) WriteFile(
 	return err
 }
 
+/*
 func (fs *Immufs) FlushFile(
 	ctx context.Context,
 	op *fuseops.FlushFileOp) (err error) {
