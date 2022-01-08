@@ -399,6 +399,7 @@ func (fs *Immufs) CreateLink(
 
 	return nil
 }
+*/
 
 func (fs *Immufs) Rename(
 	ctx context.Context,
@@ -445,6 +446,7 @@ func (fs *Immufs) Rename(
 	return nil
 }
 
+/*
 func (fs *Immufs) RmDir(
 	ctx context.Context,
 	op *fuseops.RmDirOp) error {

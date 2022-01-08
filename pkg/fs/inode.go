@@ -2,6 +2,7 @@ package fs
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"time"
@@ -244,14 +245,13 @@ func (in *Inode) AddChild(
 	in.writeOrDie()
 }
 
-/*
 // Remove an entry for a child.
 //
 // REQUIRES: in.isDir()
 // REQUIRES: An entry for the given name exists.
-func (in *inode) RemoveChild(name string) {
+func (in *Inode) RemoveChild(name string) {
 	// Update the modification time.
-	in.attrs.Mtime = time.Now()
+	in.Mtime = time.Now()
 
 	// Find the entry.
 	i, ok := in.findChild(name)
@@ -260,30 +260,34 @@ func (in *inode) RemoveChild(name string) {
 	}
 
 	// Mark it as unused.
-	in.entries[i] = fuseutil.Dirent{
+	entries := in.getChildrenOrDie()
+	entries[i] = fuseutil.Dirent{
 		Type:   fuseutil.DT_Unknown,
 		Offset: fuseops.DirOffset(i + 1),
 	}
+	in.writeChildrenOrDie(entries)
+	in.writeOrDie()
 }
 
 // Serve a ReadDir request.
 //
 // REQUIRES: in.isDir()
-func (in *inode) ReadDir(p []byte, offset int) int {
+func (in *Inode) ReadDir(p []byte, offset int) int {
 	if !in.isDir() {
 		panic("ReadDir called on non-directory.")
 	}
 
 	var n int
-	for i := offset; i < len(in.entries); i++ {
-		e := in.entries[i]
+	entries := in.getChildrenOrDie()
+	for i := offset; i < len(entries); i++ {
+		e := entries[i]
 
 		// Skip unused entries.
 		if e.Type == fuseutil.DT_Unknown {
 			continue
 		}
 
-		tmp := fuseutil.WriteDirent(p[n:], in.entries[i])
+		tmp := fuseutil.WriteDirent(p[n:], entries[i])
 		if tmp == 0 {
 			break
 		}
@@ -294,6 +298,7 @@ func (in *inode) ReadDir(p []byte, offset int) int {
 	return n
 }
 
+/*
 // Read from the file's contents. See documentation for ioutil.ReaderAt.
 //
 // REQUIRES: in.isFile()
