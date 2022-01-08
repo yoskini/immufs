@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"immufs/pkg/config"
-	"immufs/pkg/dbclient"
+	"sync"
+	"time"
 
+	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 	"github.com/sirupsen/logrus"
@@ -14,14 +16,16 @@ import (
 type Immufs struct {
 	fuseutil.NotImplementedFileSystem
 
-	idb *dbclient.ImmuDbClient
+	idb *ImmuDbClient
 	log *logrus.Entry
+
+	mu sync.Mutex
 }
 
 // Immufs constructor
 func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (*Immufs, error) {
 	log := logger.WithField("component", "immufs")
-	cl, err := dbclient.NewImmuDbClient(ctx, cfg, logger)
+	cl, err := NewImmuDbClient(ctx, cfg, logger)
 	if err != nil {
 		return nil, errors.New("failed to create immudb client: " + err.Error())
 	}
@@ -30,6 +34,16 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 		idb: cl,
 		log: log,
 	}, nil
+}
+
+// Utilities
+func (fs *Immufs) getInodeOrDie(id fuseops.InodeID) *Inode {
+	inode, err := fs.idb.GetInode(context.TODO(), int64(id))
+	if err != nil {
+		fs.log.Panicf("could not get inode %d: %s", id, err)
+	}
+
+	return inode
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -42,7 +56,6 @@ func (fs *Immufs) StatFS(
 	return nil
 }
 
-/*
 func (fs *Immufs) LookUpInode(
 	ctx context.Context,
 	op *fuseops.LookUpInodeOp) error {
@@ -67,7 +80,7 @@ func (fs *Immufs) LookUpInode(
 
 	// Fill in the response.
 	op.Entry.Child = childID
-	op.Entry.Attributes = child.attrs
+	op.Entry.Attributes = child.Attributes()
 
 	// We don't spontaneously mutate, so the kernel can cache as long as it wants
 	// (since it also handles invalidation).
@@ -91,7 +104,7 @@ func (fs *Immufs) GetInodeAttributes(
 	inode := fs.getInodeOrDie(op.Inode)
 
 	// Fill in the response.
-	op.Attributes = inode.attrs
+	op.Attributes = inode.Attributes()
 
 	// We don't spontaneously mutate, so the kernel can cache as long as it wants
 	// (since it also handles invalidation).
@@ -100,6 +113,7 @@ func (fs *Immufs) GetInodeAttributes(
 	return nil
 }
 
+/*
 func (fs *Immufs) SetInodeAttributes(
 	ctx context.Context,
 	op *fuseops.SetInodeAttributesOp) error {
