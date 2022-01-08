@@ -191,7 +191,7 @@ func (idb *ImmuDbClient) WriteContent(ctx context.Context, inumber int64, data [
 }
 
 func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
-	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO inode(inumber, size, nlink, mode, atime, mtime, ctime, crtime, uid, gid) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO inode(inumber, size, nlink, mode, atime, mtime, ctime, crtime, uid, gid) VALUES(?,?,?,?,?,?,?,?,?,?)",
 		inode.Inumber, inode.Size, inode.Nlink, inode.Mode, inode.Atime, inode.Mtime, inode.Ctime, inode.Crtime, inode.Uid, inode.Gid)
 	if err != nil {
 		idb.log.Errorf("could not write inode: %s", err)
