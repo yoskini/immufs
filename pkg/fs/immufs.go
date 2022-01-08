@@ -626,7 +626,7 @@ func (fs *Immufs) WriteFile(
 	return err
 }
 
-/*
+// TODO shoud I support file handler management here?
 func (fs *Immufs) FlushFile(
 	ctx context.Context,
 	op *fuseops.FlushFileOp) (err error) {
@@ -637,6 +637,7 @@ func (fs *Immufs) FlushFile(
 	return
 }
 
+/*
 func (fs *Immufs) ReadSymlink(
 	ctx context.Context,
 	op *fuseops.ReadSymlinkOp) error {
