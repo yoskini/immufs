@@ -199,25 +199,18 @@ func (in *Inode) Attributes() fuseops.InodeAttributes {
 	}
 }
 
-/*
 // Add an entry for a child.
 //
 // REQUIRES: in.isDir()
 // REQUIRES: dt != fuseutil.DT_Unknown
-func (in *inode) AddChild(
+func (in *Inode) AddChild(
 	id fuseops.InodeID,
 	name string,
 	dt fuseutil.DirentType) {
 	var index int
 
 	// Update the modification time.
-	in.attrs.Mtime = time.Now()
-
-	// No matter where we place the entry, make sure it has the correct Offset
-	// field.
-	defer func() {
-		in.entries[index].Offset = fuseops.DirOffset(index + 1)
-	}()
+	in.Mtime = time.Now()
 
 	// Set up the entry.
 	e := fuseutil.Dirent{
@@ -227,18 +220,31 @@ func (in *inode) AddChild(
 	}
 
 	// Look for a gap in which we can insert it.
-	for index = range in.entries {
-		if in.entries[index].Type == fuseutil.DT_Unknown {
-			in.entries[index] = e
+	entries := in.getChildrenOrDie()
+	for index = range entries {
+		if entries[index].Type == fuseutil.DT_Unknown {
+			entries[index] = e
+			// No matter where we place the entry, make sure it has the correct Offset
+			// field.
+			entries[index].Offset = fuseops.DirOffset(index + 1)
+
+			in.writeChildrenOrDie(entries)
+			in.writeOrDie()
 			return
 		}
 	}
 
 	// Append it to the end.
-	index = len(in.entries)
-	in.entries = append(in.entries, e)
+	index = len(entries)
+	// No matter where we place the entry, make sure it has the correct Offset
+	// field.
+	e.Offset = fuseops.DirOffset(index + 1)
+	entries = append(entries, e)
+	in.writeChildrenOrDie(entries)
+	in.writeOrDie()
 }
 
+/*
 // Remove an entry for a child.
 //
 // REQUIRES: in.isDir()
