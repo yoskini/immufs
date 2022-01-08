@@ -100,6 +100,27 @@ func (in *Inode) findChild2(name string) (d fuseutil.Dirent, ok bool) {
 	return e, false
 }
 
+func (in *Inode) readContentOrDie() []byte {
+	content, err := in.cl.ReadContent(context.TODO(), in.Inumber)
+	if err != nil {
+		panic(err)
+	}
+
+	return content
+}
+
+func (in *Inode) writeContentOrDie(content []byte) {
+	if err := in.cl.WriteContent(context.TODO(), in.Inumber, content); err != nil {
+		panic(err)
+	}
+}
+
+func (in *Inode) writeOrDie() {
+	if err := in.cl.WriteInode(context.TODO(), in); err != nil {
+		panic(err)
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////
 // Public methods
 ////////////////////////////////////////////////////////////////////////
@@ -289,42 +310,49 @@ func (in *inode) WriteAt(p []byte, off int64) (int, error) {
 
 	return n, nil
 }
-
+*/
 // Update attributes from non-nil parameters.
-func (in *inode) SetAttributes(
+func (in *Inode) SetAttributes(
 	size *uint64,
 	mode *os.FileMode,
 	mtime *time.Time) {
 	// Update the modification time.
-	in.attrs.Mtime = time.Now()
+	in.Mtime = time.Now()
 
 	// Truncate?
 	if size != nil {
 		intSize := int(*size)
 
 		// Update contents.
-		if intSize <= len(in.contents) {
-			in.contents = in.contents[:intSize]
+		content := in.readContentOrDie()
+		if intSize <= len(content) {
+			content = content[:intSize]
+			in.writeContentOrDie(content)
 		} else {
-			padding := make([]byte, intSize-len(in.contents))
-			in.contents = append(in.contents, padding...)
+			padding := make([]byte, intSize-len(content))
+			content = append(content, padding...)
+			in.writeContentOrDie(content)
 		}
 
 		// Update attributes.
-		in.attrs.Size = *size
+		in.Size = int64(*size)
 	}
 
 	// Change mode?
 	if mode != nil {
-		in.attrs.Mode = *mode
+		in.Mode = int64(*mode)
 	}
 
 	// Change mtime?
 	if mtime != nil {
-		in.attrs.Mtime = *mtime
+		in.Mtime = *mtime
 	}
+
+	// Write Inode data
+	in.writeOrDie()
 }
 
+/*
 func (in *inode) Fallocate(mode uint32, offset uint64, length uint64) error {
 	if mode != 0 {
 		return fuse.ENOSYS
