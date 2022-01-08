@@ -194,3 +194,22 @@ func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
 	return err
 }
 
+func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
+	res, err := idb.cl.QueryContext(ctx, "SELECT MAX(inumber) from inode")
+	if err != nil {
+		return -1, err
+	}
+
+	var inumber int64
+
+	defer res.Close()
+	if found := res.Next(); !found {
+		return 0, nil
+	}
+
+	err = res.Scan(
+		&inumber,
+	)
+
+	return inumber, nil
+}

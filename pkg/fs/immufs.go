@@ -47,6 +47,18 @@ func (fs *Immufs) getInodeOrDie(id fuseops.InodeID) *Inode {
 	return inode
 }
 
+// Calculate the next available inumber
+//
+// LOCKS_REQUIRED(fs.mu)
+func (fs *Immufs) nextInumber() int64 {
+	next, err := fs.idb.NextInumber(context.TODO())
+	if err != nil {
+		fs.log.Panic("could not get an available inumber: %s", err)
+	}
+
+	return next
+}
+
 ////////////////////////////////////////////////////////////////////////
 // FileSystem methods
 ////////////////////////////////////////////////////////////////////////
