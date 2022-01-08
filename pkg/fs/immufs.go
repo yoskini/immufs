@@ -515,7 +515,7 @@ func (fs *Immufs) Unlink(
 	return nil
 }
 
-/*
+// TODO should I implement a dir handler?
 func (fs *Immufs) OpenDir(
 	ctx context.Context,
 	op *fuseops.OpenDirOp) error {
@@ -538,6 +538,7 @@ func (fs *Immufs) OpenDir(
 	return nil
 }
 
+/*
 func (fs *Immufs) ReadDir(
 	ctx context.Context,
 	op *fuseops.ReadDirOp) error {
