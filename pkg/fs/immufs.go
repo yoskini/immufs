@@ -483,7 +483,6 @@ func (fs *Immufs) RmDir(
 	return nil
 }
 
-/*
 func (fs *Immufs) Unlink(
 	ctx context.Context,
 	op *fuseops.UnlinkOp) error {
@@ -510,11 +509,13 @@ func (fs *Immufs) Unlink(
 	parent.RemoveChild(op.Name)
 
 	// Mark the child as unlinked.
-	child.attrs.Nlink--
+	child.Nlink--
+	child.writeOrDie()
 
 	return nil
 }
 
+/*
 func (fs *Immufs) OpenDir(
 	ctx context.Context,
 	op *fuseops.OpenDirOp) error {
