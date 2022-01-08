@@ -41,6 +41,9 @@ func (in *Inode) isFile() bool {
 	return !(in.isDir() || in.isSymlink())
 }
 
+// getChildrenOrDie returns the list of children of a directory
+//
+// REQUIRES in.isDir()
 func (in *Inode) getChildrenOrDie() []fuseutil.Dirent {
 	entries, err := in.cl.GetChildren(context.TODO(), in.Inumber)
 	if err != nil {
@@ -101,6 +104,7 @@ func (in *Inode) writeContentOrDie(content []byte) {
 	}
 }
 
+// Flush inode to immudb. It must be called to make every change to the inode permanent.
 func (in *Inode) writeOrDie() {
 	if err := in.cl.WriteInode(context.TODO(), in); err != nil {
 		panic(err)
