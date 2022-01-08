@@ -5,6 +5,7 @@ import (
 	"errors"
 	"immufs/pkg/config"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jacobsa/fuse"
@@ -113,7 +114,6 @@ func (fs *Immufs) GetInodeAttributes(
 	return nil
 }
 
-/*
 func (fs *Immufs) SetInodeAttributes(
 	ctx context.Context,
 	op *fuseops.SetInodeAttributesOp) error {
@@ -138,7 +138,7 @@ func (fs *Immufs) SetInodeAttributes(
 	inode.SetAttributes(op.Size, op.Mode, op.Mtime)
 
 	// Fill in the response.
-	op.Attributes = inode.attrs
+	op.Attributes = inode.Attributes()
 
 	// We don't spontaneously mutate, so the kernel can cache as long as it wants
 	// (since it also handles invalidation).
@@ -147,6 +147,7 @@ func (fs *Immufs) SetInodeAttributes(
 	return err
 }
 
+/*
 func (fs *Immufs) MkDir(
 	ctx context.Context,
 	op *fuseops.MkDirOp) error {
