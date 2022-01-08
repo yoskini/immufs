@@ -117,7 +117,7 @@ func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseu
 		return nil, fmt.Errorf("Inode %d not found", parent)
 	}
 
-	err = res.Scan(content)
+	err = res.Scan(&content)
 	if err != nil {
 		idb.log.Errorf("could not read directory %d content: %s", parent, err)
 
@@ -170,7 +170,7 @@ func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte
 		return nil, fmt.Errorf("Inode %d not found", inumber)
 	}
 
-	err = res.Scan(content)
+	err = res.Scan(&content)
 	if err != nil {
 		idb.log.Errorf("could not read file %d content: %s", inumber, err)
 
