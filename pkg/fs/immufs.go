@@ -109,13 +109,17 @@ func (fs *Immufs) allocateInode(
 func (fs *Immufs) StatFS(
 	ctx context.Context,
 	op *fuseops.StatFSOp) error {
+	fs.log.Infof("--> StatFS")
 	return nil
 }
 
 func (fs *Immufs) LookUpInode(
 	ctx context.Context,
 	op *fuseops.LookUpInodeOp) error {
+	fs.log.Infof("--> LookupInode")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "LookupInode").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -128,6 +132,8 @@ func (fs *Immufs) LookUpInode(
 	// Does the directory have an entry with the given name?
 	childID, _, ok := inode.LookUpChild(op.Name)
 	if !ok {
+		fs.log.WithField("API", "LookupInode").Warningf("Entry %s not found", op.Name)
+
 		return fuse.ENOENT
 	}
 
@@ -149,7 +155,10 @@ func (fs *Immufs) LookUpInode(
 func (fs *Immufs) GetInodeAttributes(
 	ctx context.Context,
 	op *fuseops.GetInodeAttributesOp) error {
+	fs.log.Infof("--> GetInodeAttributes")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "GetInodeAttributes").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -172,7 +181,10 @@ func (fs *Immufs) GetInodeAttributes(
 func (fs *Immufs) SetInodeAttributes(
 	ctx context.Context,
 	op *fuseops.SetInodeAttributesOp) error {
+	fs.log.Infof("--> SetInodeAttributes")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "SetInodeAttributes").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -183,6 +195,7 @@ func (fs *Immufs) SetInodeAttributes(
 	if op.Size != nil && op.Handle == nil && *op.Size != 0 {
 		// require that truncate to non-zero has to be ftruncate()
 		// but allow open(O_TRUNC)
+		fs.log.WithField("API", "SetInodeAttributes").Warningf("Bad file size")
 		err = syscall.EBADF
 	}
 
@@ -205,7 +218,10 @@ func (fs *Immufs) SetInodeAttributes(
 func (fs *Immufs) MkDir(
 	ctx context.Context,
 	op *fuseops.MkDirOp) error {
+	fs.log.Infof("--> MkDir")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "MkDir").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -219,6 +235,8 @@ func (fs *Immufs) MkDir(
 	// duplicate.
 	_, _, exists := parent.LookUpChild(op.Name)
 	if exists {
+		fs.log.WithField("API", "MkDir").Warningf("Entry %s already exists", op.Name)
+
 		return fuse.EEXIST
 	}
 
@@ -251,7 +269,10 @@ func (fs *Immufs) MkDir(
 func (fs *Immufs) MkNode(
 	ctx context.Context,
 	op *fuseops.MkNodeOp) error {
+	fs.log.Infof("--> MkNode")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "MkDir").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -275,6 +296,7 @@ func (fs *Immufs) createFile(
 	// duplicate.
 	_, _, exists := parent.LookUpChild(name)
 	if exists {
+		fs.log.WithField("API", "createFile").Warningf("Entry %s already exists", name)
 		return fuseops.ChildInodeEntry{}, fuse.EEXIST
 	}
 
@@ -313,8 +335,10 @@ func (fs *Immufs) createFile(
 func (fs *Immufs) CreateFile(
 	ctx context.Context,
 	op *fuseops.CreateFileOp) (err error) {
+	fs.log.Infof("--> CreateFile")
 	if op.OpContext.Pid == 0 {
 		// CreateFileOp should have a valid pid in context.
+		fs.log.WithField("API", "MkDir").Warningf("Invalid PID 0")
 		return fuse.EINVAL
 	}
 
@@ -427,7 +451,10 @@ func (fs *Immufs) CreateLink(
 func (fs *Immufs) Rename(
 	ctx context.Context,
 	op *fuseops.RenameOp) error {
+	fs.log.Infof("--> Rename")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "Rename").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -439,6 +466,8 @@ func (fs *Immufs) Rename(
 	childID, childType, ok := oldParent.LookUpChild(op.OldName)
 
 	if !ok {
+		fs.log.WithField("API", "Rename").Warningf("Entry %s not found", op.OldName)
+
 		return fuse.ENOENT
 	}
 
@@ -451,6 +480,8 @@ func (fs *Immufs) Rename(
 
 		var buf [4096]byte
 		if existing.isDir() && existing.ReadDir(buf[:], 0) > 0 {
+			fs.log.WithField("API", "Rename").Warningf("Entry %s not empty", op.NewName)
+
 			return fuse.ENOTEMPTY
 		}
 
@@ -472,7 +503,10 @@ func (fs *Immufs) Rename(
 func (fs *Immufs) RmDir(
 	ctx context.Context,
 	op *fuseops.RmDirOp) error {
+	fs.log.Infof("--> RmDir")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "RmDir").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -485,6 +519,8 @@ func (fs *Immufs) RmDir(
 	// Find the child within the parent.
 	childID, _, ok := parent.LookUpChild(op.Name)
 	if !ok {
+		fs.log.WithField("API", "RmDir").Warningf("Entry %s not found", op.Name)
+
 		return fuse.ENOENT
 	}
 
@@ -493,6 +529,8 @@ func (fs *Immufs) RmDir(
 
 	// Make sure the child is empty.
 	if child.Len() != 0 {
+		fs.log.WithField("API", "RmDir").Warningf("Entry %s not empty", op.Name)
+
 		return fuse.ENOTEMPTY
 	}
 
@@ -509,7 +547,10 @@ func (fs *Immufs) RmDir(
 func (fs *Immufs) Unlink(
 	ctx context.Context,
 	op *fuseops.UnlinkOp) error {
+	fs.log.Infof("--> Unlink")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "Unlink").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -522,6 +563,8 @@ func (fs *Immufs) Unlink(
 	// Find the child within the parent.
 	childID, _, ok := parent.LookUpChild(op.Name)
 	if !ok {
+		fs.log.WithField("API", "Unlink").Warningf("Entry %s not found", op.Name)
+
 		return fuse.ENOENT
 	}
 
@@ -542,7 +585,10 @@ func (fs *Immufs) Unlink(
 func (fs *Immufs) OpenDir(
 	ctx context.Context,
 	op *fuseops.OpenDirOp) error {
+	fs.log.Infof("--> OpenDir")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "OpenDir").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -564,7 +610,10 @@ func (fs *Immufs) OpenDir(
 func (fs *Immufs) ReadDir(
 	ctx context.Context,
 	op *fuseops.ReadDirOp) error {
+	fs.log.Infof("--> ReadDir")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "ReadDir").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -584,8 +633,11 @@ func (fs *Immufs) ReadDir(
 func (fs *Immufs) OpenFile(
 	ctx context.Context,
 	op *fuseops.OpenFileOp) error {
+	fs.log.Infof("--> OpenFile")
 	if op.OpContext.Pid == 0 {
 		// OpenFileOp should have a valid pid in context.
+		fs.log.WithField("API", "OpenFile").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -607,7 +659,10 @@ func (fs *Immufs) OpenFile(
 func (fs *Immufs) ReadFile(
 	ctx context.Context,
 	op *fuseops.ReadFileOp) error {
+	fs.log.Infof("--> ReadFile")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "ReadFile").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -632,7 +687,10 @@ func (fs *Immufs) ReadFile(
 func (fs *Immufs) WriteFile(
 	ctx context.Context,
 	op *fuseops.WriteFileOp) error {
+	fs.log.Infof("--> WriteFile")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "WriteFile").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
@@ -652,8 +710,11 @@ func (fs *Immufs) WriteFile(
 func (fs *Immufs) FlushFile(
 	ctx context.Context,
 	op *fuseops.FlushFileOp) (err error) {
+	fs.log.Infof("--> FlushFile")
 	if op.OpContext.Pid == 0 {
 		// FlushFileOp should have a valid pid in context.
+		fs.log.WithField("API", "FlushFile").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 	return
@@ -780,7 +841,10 @@ func (fs *Immufs) SetXattr(ctx context.Context,
 
 func (fs *Immufs) Fallocate(ctx context.Context,
 	op *fuseops.FallocateOp) error {
+	fs.log.Infof("--> Fallocate")
 	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "Fallocate").Warningf("Invalid PID 0")
+
 		return fuse.EINVAL
 	}
 
