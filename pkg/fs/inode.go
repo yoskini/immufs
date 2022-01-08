@@ -122,6 +122,38 @@ func (in *Inode) writeOrDie() {
 // Public methods
 ////////////////////////////////////////////////////////////////////////
 
+// Constructor
+// Create a new inode with the supplied attributes, which need not contain
+// time-related information (the inode object will take care of that).
+func NewInode(inumber int64, attrs fuseops.InodeAttributes, db *ImmuDbClient) *Inode {
+	// Update time info.
+	now := time.Now()
+	attrs.Mtime = now
+	attrs.Crtime = now
+
+	// Create the object.
+	inode := Inode{
+		Inumber: inumber,
+		Size:    int64(attrs.Size),
+		Nlink:   int64(attrs.Nlink),
+		Mode:    int64(attrs.Mode),
+		Atime:   attrs.Atime,
+		Mtime:   attrs.Mtime,
+		Ctime:   attrs.Ctime,
+		Crtime:  attrs.Crtime,
+		Uid:     int64(attrs.Uid),
+		Gid:     int64(attrs.Gid),
+
+		cl: db,
+
+		// TODO manage extended attr?
+		//xattrs: make(map[string][]byte),
+	}
+	inode.writeOrDie()
+
+	return &inode
+}
+
 // Return the number of children of the directory.
 //
 // REQUIRES: in.isDir()
