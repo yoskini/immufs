@@ -128,6 +128,24 @@ func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseu
 	return dirents, err
 }
 
+func (idb *ImmuDbClient) WriteChildren(ctx context.Context, parentInumber int64, children []fuseutil.Dirent) error {
+	content, err := marshalDirents(children)
+	if err != nil {
+		idb.log.Errorf("could not marshal directory entries: %s", children)
+
+		return err
+	}
+
+	err = idb.WriteContent(ctx, parentInumber, content)
+	if err != nil {
+		idb.log.Errorf("could not write directory content: %s", err)
+
+		return err
+	}
+
+	return nil
+}
+
 // File content can be read as a whole
 func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT content from content WHERE inumber=?", inumber)
