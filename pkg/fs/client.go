@@ -101,7 +101,7 @@ func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, e
 }
 
 func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseutil.Dirent, error) {
-	res, err := idb.cl.QueryContext(ctx, "SELECT content from content WHERE inumber=?", parent)
+	res, err := idb.cl.QueryContext(ctx, "SELECT content FROM content WHERE inumber=?", parent)
 	if err != nil {
 		idb.log.Errorf("could not get directory %d content: %s", parent, err)
 
@@ -154,7 +154,7 @@ func (idb *ImmuDbClient) WriteChildren(ctx context.Context, parentInumber int64,
 
 // File content can be read as a whole
 func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte, error) {
-	res, err := idb.cl.QueryContext(ctx, "SELECT content from content WHERE inumber=?", inumber)
+	res, err := idb.cl.QueryContext(ctx, "SELECT content FROM content WHERE inumber=?", inumber)
 	if err != nil {
 		idb.log.Errorf("could not get file %d content: %s", inumber, err)
 
@@ -201,7 +201,7 @@ func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
 }
 
 func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
-	res, err := idb.cl.QueryContext(ctx, "SELECT MAX(inumber) from inode")
+	res, err := idb.cl.QueryContext(ctx, "SELECT MAX(inumber) FROM inode")
 	if err != nil {
 		return -1, err
 	}
