@@ -57,7 +57,9 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 			Gid:  fs.gid,
 		}
 		// Adding root if not exists
-		_ = NewInode(1, rootAttrs, fs.idb)
+		root := NewInode(fuseops.RootInodeID, rootAttrs, fs.idb)
+		rootEnts := make([]fuseutil.Dirent, 0)
+		root.writeChildrenOrDie(rootEnts)
 		fs.log.Info("root inode created")
 	}
 
