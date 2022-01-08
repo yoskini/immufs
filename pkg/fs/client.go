@@ -118,7 +118,7 @@ func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseu
 		return nil, err
 	}
 
-	dirents, err := unmarshalDirentsOrDie(content)
+	dirents, err := unmarshalDirents(content)
 	if err != nil {
 		idb.log.Errorf("could not unmarshal dirents of inode %d: %s", parent, err)
 
