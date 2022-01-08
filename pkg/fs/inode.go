@@ -53,6 +53,13 @@ func (in *Inode) getChildrenOrDie() []fuseutil.Dirent {
 	return entries
 }
 
+func (in *Inode) writeChildrenOrDie(children []fuseutil.Dirent) {
+	err := in.cl.WriteChildren(context.TODO(), in.Inumber, children)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Return the index of the child within in.entries, if it exists.
 //
 // REQUIRES: in.isDir()
