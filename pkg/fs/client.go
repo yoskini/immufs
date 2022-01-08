@@ -37,6 +37,7 @@ func NewImmuDbClient(ctx context.Context, cfg *config.Config, log *logrus.Logger
 	opts.Address = cfg.Immudb
 	opts.Username = cfg.User
 	opts.Password = cfg.Password
+	opts.Database = cfg.Database
 	db := stdlib.OpenDB(opts)
 	return &ImmuDbClient{
 		cl:  db,
