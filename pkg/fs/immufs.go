@@ -116,7 +116,7 @@ func (fs *Immufs) StatFS(
 func (fs *Immufs) LookUpInode(
 	ctx context.Context,
 	op *fuseops.LookUpInodeOp) error {
-	fs.log.Infof("--> LookupInode")
+	fs.log.Infof("--> LookupInode: %s", op.Name)
 	if op.OpContext.Pid == 0 {
 		fs.log.WithField("API", "LookupInode").Warningf("Invalid PID 0")
 
@@ -149,13 +149,15 @@ func (fs *Immufs) LookUpInode(
 	op.Entry.AttributesExpiration = time.Now().Add(365 * 24 * time.Hour)
 	op.Entry.EntryExpiration = op.Entry.AttributesExpiration
 
+	fs.log.WithField("API", "LookupInode").Infof("Inode found: %+v", *op)
+
 	return nil
 }
 
 func (fs *Immufs) GetInodeAttributes(
 	ctx context.Context,
 	op *fuseops.GetInodeAttributesOp) error {
-	fs.log.Infof("--> GetInodeAttributes")
+	fs.log.Infof("--> GetInodeAttributes: %d", op.Inode)
 	if op.OpContext.Pid == 0 {
 		fs.log.WithField("API", "GetInodeAttributes").Warningf("Invalid PID 0")
 
@@ -175,6 +177,7 @@ func (fs *Immufs) GetInodeAttributes(
 	// (since it also handles invalidation).
 	op.AttributesExpiration = time.Now().Add(365 * 24 * time.Hour)
 
+	fs.log.WithField("API", "GetInodeAttributes").Infof("Attributes got: %+v", *op)
 	return nil
 }
 
@@ -218,7 +221,7 @@ func (fs *Immufs) SetInodeAttributes(
 func (fs *Immufs) MkDir(
 	ctx context.Context,
 	op *fuseops.MkDirOp) error {
-	fs.log.Infof("--> MkDir")
+	fs.log.Infof("--> MkDir: %s", op.Name)
 	if op.OpContext.Pid == 0 {
 		fs.log.WithField("API", "MkDir").Warningf("Invalid PID 0")
 
@@ -262,6 +265,8 @@ func (fs *Immufs) MkDir(
 	// (since it also handles invalidation).
 	op.Entry.AttributesExpiration = time.Now().Add(365 * 24 * time.Hour)
 	op.Entry.EntryExpiration = op.Entry.AttributesExpiration
+
+	fs.log.WithField("API", "MkDir").Infof("Directory created: %+v", *op)
 
 	return nil
 }
