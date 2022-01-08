@@ -225,7 +225,6 @@ func (fs *Immufs) MkDir(
 	return nil
 }
 
-/*
 func (fs *Immufs) MkNode(
 	ctx context.Context,
 	op *fuseops.MkNodeOp) error {
@@ -278,7 +277,7 @@ func (fs *Immufs) createFile(
 	// Fill in the response entry.
 	var entry fuseops.ChildInodeEntry
 	entry.Child = childID
-	entry.Attributes = child.attrs
+	entry.Attributes = child.Attributes()
 
 	// We don't spontaneously mutate, so the kernel can cache as long as it wants
 	// (since it also handles invalidation).
@@ -288,6 +287,7 @@ func (fs *Immufs) createFile(
 	return entry, nil
 }
 
+/*
 func (fs *Immufs) CreateFile(
 	ctx context.Context,
 	op *fuseops.CreateFileOp) (err error) {
