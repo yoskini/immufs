@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"immufs/pkg/config"
+	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +21,9 @@ type Immufs struct {
 	idb *ImmuDbClient
 	log *logrus.Entry
 
+	uid uint32
+	gid uint32
+
 	mu sync.Mutex
 }
 
@@ -34,10 +38,15 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 	return &Immufs{
 		idb: cl,
 		log: log,
+		uid: uint32(os.Getuid()),
+		gid: uint32(os.Getgid()),
 	}, nil
 }
 
 // Utilities
+// Find the given inode. Panic if it doesn't exist.
+//
+// LOCKS_REQUIRED(fs.mu)
 func (fs *Immufs) getInodeOrDie(id fuseops.InodeID) *Inode {
 	inode, err := fs.idb.GetInode(context.TODO(), int64(id))
 	if err != nil {
@@ -57,6 +66,17 @@ func (fs *Immufs) nextInumber() int64 {
 	}
 
 	return next
+}
+
+// Allocate a new inode, assigning it an ID that is not in use.
+//
+// LOCKS_REQUIRED(fs.mu)
+func (fs *Immufs) allocateInode(
+	attrs fuseops.InodeAttributes) (id fuseops.InodeID, inode *Inode) {
+	// Create the inode.
+	inode = NewInode(fs.nextInumber(), attrs, fs.idb)
+
+	return fuseops.InodeID(inode.Inumber), inode
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -159,7 +179,6 @@ func (fs *Immufs) SetInodeAttributes(
 	return err
 }
 
-/*
 func (fs *Immufs) MkDir(
 	ctx context.Context,
 	op *fuseops.MkDirOp) error {
@@ -196,7 +215,7 @@ func (fs *Immufs) MkDir(
 
 	// Fill in the response.
 	op.Entry.Child = childID
-	op.Entry.Attributes = child.attrs
+	op.Entry.Attributes = child.Attributes()
 
 	// We don't spontaneously mutate, so the kernel can cache as long as it wants
 	// (since it also handles invalidation).
@@ -206,6 +225,7 @@ func (fs *Immufs) MkDir(
 	return nil
 }
 
+/*
 func (fs *Immufs) MkNode(
 	ctx context.Context,
 	op *fuseops.MkNodeOp) error {
