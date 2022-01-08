@@ -12,7 +12,6 @@ import (
 
 type Inode struct {
 	Inumber int64
-	Name    int64
 	Size    int64
 	Nlink   int64
 	Mode    int64
@@ -22,7 +21,6 @@ type Inode struct {
 	Crtime  time.Time
 	Uid     int64
 	Gid     int64
-	Parent  int64
 
 	cl *ImmuDbClient
 }
