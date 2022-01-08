@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"immufs/pkg/config"
@@ -12,6 +13,10 @@ import (
 	"github.com/codenotary/immudb/pkg/stdlib"
 	"github.com/jacobsa/fuse/fuseutil"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	ErrInodeNotFound = errors.New("Inode not found")
 )
 
 type ImmuDbClient struct {
@@ -70,7 +75,7 @@ func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, e
 	if found := res.Next(); !found {
 		idb.log.Errorf("Inode %d not found", inumber)
 
-		return nil, fmt.Errorf("Inode %d not found", inumber)
+		return nil, ErrInodeNotFound
 	}
 
 	err = res.Scan(
