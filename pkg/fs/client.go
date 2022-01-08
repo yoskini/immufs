@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"immufs/pkg/config"
@@ -16,6 +17,18 @@ import (
 type ImmuDbClient struct {
 	cl  *sql.DB
 	log *logrus.Entry
+}
+
+// Helpers
+func marshalDirents(dirent []fuseutil.Dirent) ([]byte, error) {
+	return json.Marshal(dirent)
+}
+
+func unmarshalDirents(data []byte) ([]fuseutil.Dirent, error) {
+	var ret []fuseutil.Dirent
+	err := json.Unmarshal(data, ret)
+
+	return ret, err
 }
 
 // Instantiate and connect the Immudb client

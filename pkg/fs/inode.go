@@ -2,7 +2,6 @@ package fs
 
 import (
 	"context"
-	"encoding/json"
 	"io/fs"
 	"os"
 	"time"
@@ -26,17 +25,6 @@ type Inode struct {
 	Parent  int64
 
 	cl *ImmuDbClient
-}
-
-func marshalDirentsOrDie(dirent []fuseutil.Dirent) ([]byte, error) {
-	return json.Marshal(dirent)
-}
-
-func unmarshalDirentsOrDie(data []byte) ([]fuseutil.Dirent, error) {
-	var ret []fuseutil.Dirent
-	err := json.Unmarshal(data, ret)
-
-	return ret, err
 }
 
 ////////////////////////////////////////////////////////////////////////
