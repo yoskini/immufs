@@ -287,7 +287,6 @@ func (fs *Immufs) createFile(
 	return entry, nil
 }
 
-/*
 func (fs *Immufs) CreateFile(
 	ctx context.Context,
 	op *fuseops.CreateFileOp) (err error) {
@@ -303,6 +302,7 @@ func (fs *Immufs) CreateFile(
 	return err
 }
 
+/*
 func (fs *Immufs) CreateSymlink(
 	ctx context.Context,
 	op *fuseops.CreateSymlinkOp) error {
