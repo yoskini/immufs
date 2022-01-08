@@ -36,12 +36,32 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 		return nil, errors.New("failed to create immudb client: " + err.Error())
 	}
 
-	return &Immufs{
+	fs := &Immufs{
 		idb: cl,
 		log: log,
-		uid: uint32(os.Getuid()),
-		gid: uint32(os.Getgid()),
-	}, nil
+		uid: cfg.Uid,
+		gid: cfg.Gid,
+	}
+
+	// Lookup root
+	_, err = fs.idb.GetInode(ctx, 1)
+	if err != nil {
+		if !errors.Is(err, ErrInodeNotFound) {
+			return nil, err
+		}
+
+		// Set up the root inode.
+		rootAttrs := fuseops.InodeAttributes{
+			Mode: 0700 | os.ModeDir,
+			Uid:  fs.uid,
+			Gid:  fs.gid,
+		}
+		// Adding root if not exists
+		_ = NewInode(1, rootAttrs, fs.idb)
+		fs.log.Info("root inode created")
+	}
+
+	return fs, nil
 }
 
 // Utilities
