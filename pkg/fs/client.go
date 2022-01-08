@@ -217,5 +217,5 @@ func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
 		&inumber,
 	)
 
-	return inumber, nil
+	return inumber + 1, nil
 }
