@@ -750,6 +750,7 @@ func (fs *Immufs) SetXattr(ctx context.Context,
 	inode.xattrs[op.Name] = value
 	return nil
 }
+*/
 
 func (fs *Immufs) Fallocate(ctx context.Context,
 	op *fuseops.FallocateOp) error {
@@ -763,4 +764,3 @@ func (fs *Immufs) Fallocate(ctx context.Context,
 	inode.Fallocate(op.Mode, op.Offset, op.Length)
 	return nil
 }
-*/

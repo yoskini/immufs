@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 )
@@ -392,17 +393,19 @@ func (in *Inode) SetAttributes(
 	in.writeOrDie()
 }
 
-/*
-func (in *inode) Fallocate(mode uint32, offset uint64, length uint64) error {
+func (in *Inode) Fallocate(mode uint32, offset uint64, length uint64) error {
 	if mode != 0 {
 		return fuse.ENOSYS
 	}
 	newSize := int(offset + length)
-	if newSize > len(in.contents) {
-		padding := make([]byte, newSize-len(in.contents))
-		in.contents = append(in.contents, padding...)
-		in.attrs.Size = offset + length
+	content := in.readContentOrDie()
+	if newSize > len(content) {
+		padding := make([]byte, newSize-len(content))
+		content = append(content, padding...)
+		in.Size = int64(offset + length)
+
+		in.writeOrDie()
+		in.writeContentOrDie(content)
 	}
 	return nil
 }
-*/
