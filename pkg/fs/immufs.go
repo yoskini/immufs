@@ -280,12 +280,13 @@ func (fs *Immufs) MkDir(
 	}
 
 	// Set up attributes from the child.
+	now := time.Now()
 	childAttrs := fuseops.InodeAttributes{
 		Nlink:  1,
-		Atime:  time.Now(),
-		Mtime:  time.Now(),
-		Ctime:  time.Now(),
-		Crtime: time.Now(),
+		Atime:  now,
+		Mtime:  now,
+		Ctime:  now,
+		Crtime: now,
 		Mode:   op.Mode,
 		Uid:    fs.uid,
 		Gid:    fs.gid,
