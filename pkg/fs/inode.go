@@ -430,3 +430,11 @@ func (in *Inode) DecrRef(N uint64) int64 {
 
 	return in.Nlink
 }
+
+// Delete an Inode from Immudb
+func (in *Inode) Del() {
+	err := in.cl.DeleteInode(context.TODO(), in.Inumber)
+	if err != nil {
+		panic(err)
+	}
+}
