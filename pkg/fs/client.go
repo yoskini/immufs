@@ -165,9 +165,10 @@ func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte
 
 	defer res.Close()
 	if found := res.Next(); !found {
-		idb.log.Errorf("File %d content not found", inumber)
+		idb.log.Warnf("Content not found for inode: %d", inumber)
 
-		return nil, fmt.Errorf("Inode %d not found", inumber)
+		return []byte{}, nil
+		//return nil, fmt.Errorf("Inode %d not found", inumber)
 	}
 
 	err = res.Scan(&content)
