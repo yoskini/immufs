@@ -27,6 +27,25 @@ or, in alternative, use:
 $> ./immufs -c config.yaml 
 ```
 
+An example of usage is as follows:
+
+```bash
+$> cd mnt
+mnt $> touch abc
+mnt $> mkdir 1234
+mnt $> ls            
+1234 abc
+mnt $> echo hello > world.txt
+mnt $> ls
+1234      abc       world.txt
+mnt $> cat world.txt 
+hello
+mnt $> echo -n 123 > xxx
+mnt $> echo 456 >> xxx  
+mnt $> cat xxx          
+123456
+```
+
 ## BUGS AND LIMITATIONS
 
 ImmuFS implementation is not complete and has some defetcs:
