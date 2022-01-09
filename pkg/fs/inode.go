@@ -417,3 +417,16 @@ func (in *Inode) Fallocate(mode uint32, offset uint64, length uint64) error {
 	}
 	return nil
 }
+
+// DecrRef decrements the reference counter and returns its current value.
+// The reference count can't become negative.
+func (in *Inode) DecrRef(N uint64) int64 {
+	in.Nlink -= int64(N)
+	if in.Nlink < 0 {
+		in.Nlink = 0
+	}
+
+	in.writeOrDie()
+
+	return in.Nlink
+}
