@@ -74,13 +74,18 @@ var (
 			func() {
 				<-c
 				// Unmount fs
-				fuse.Unmount(cfg.Mountpoint)
-				err := mfs.Join(context.Background())
-				if err != nil {
-					logger.Fatalf("could not Join immufs for unmounting: %s", err)
+				select {
+				case <-time.After(time.Second * 3):
+					logger.Fatalf("could not Join immufs for unmounting: %s. Remember to run umount immufs manually.", err)
+				default:
+					fuse.Unmount(cfg.Mountpoint)
+					err := mfs.Join(context.Background())
+					if err != nil {
+						logger.Fatalf("could not Join immufs for unmounting: %s", err)
+					}
+					logger.Info("immufs unmounted")
+					os.Exit(1)
 				}
-				logger.Info("immufs unmounted")
-				os.Exit(1)
 			}()
 		},
 	}
