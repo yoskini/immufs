@@ -26,6 +26,7 @@ const (
 	flagPassword   = "password"
 	flagDatabase   = "database"
 	flagMountpoint = "mountpoint"
+	flagLogFile    = "logfile"
 	flagUid        = "uid"
 	flagGid        = "gid"
 )
@@ -107,6 +108,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP(flagPassword, "p", "immudb", "immudb password")
 	rootCmd.PersistentFlags().StringP(flagDatabase, "d", "defaultdb", "immudb database name")
 	rootCmd.PersistentFlags().StringP(flagMountpoint, "m", "", "mountpoint")
+	rootCmd.PersistentFlags().StringP(flagLogFile, "f", "", "logfile")
 	rootCmd.PersistentFlags().Int32P(flagUid, "i", int32(os.Getuid()), "uid to use when mounting immufs")
 	rootCmd.PersistentFlags().Int32P(flagGid, "g", int32(os.Getgid()), "gid to use when mounting immufs")
 
@@ -138,6 +140,7 @@ func readFlags(flag *pflag.FlagSet) {
 	cfg.Password = viper.GetString(flagPassword)
 	cfg.Database = viper.GetString(flagDatabase)
 	cfg.Mountpoint = viper.GetString(flagMountpoint)
+	cfg.LogFile = viper.GetString(flagLogFile)
 	cfg.Uid = viper.GetUint32(flagUid)
 	cfg.Gid = viper.GetUint32(flagGid)
 }
