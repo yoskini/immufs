@@ -202,6 +202,24 @@ func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
 	return err
 }
 
+func (idb *ImmuDbClient) DeleteInode(ctx context.Context, inumber int64) error {
+	_, err := idb.cl.ExecContext(ctx, "DELETE FROM inode WHERE inumber=?", inumber)
+	if err != nil {
+		idb.log.Errorf("could not delete inode %d: %s", inumber, err)
+
+		return err
+	}
+
+	_, err = idb.cl.ExecContext(ctx, "DELETE FROM content WHERE inumber=?", inumber)
+	if err != nil {
+		idb.log.Errorf("could not delete inode %d content: %s", inumber, err)
+
+		return err
+	}
+
+	return nil
+}
+
 func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT MAX(inumber) FROM inode")
 	if err != nil {
