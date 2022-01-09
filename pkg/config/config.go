@@ -6,7 +6,7 @@ type Config struct {
 	Password   string `yaml:"password"`
 	Database   string `yaml:"database"`
 	Mountpoint string `yaml:"mountpoint"`
-	LogFile    string `yaml:"logFile"`
+	LogFile    string `yaml:"logfile"`
 	Uid        uint32 `yaml:"uid"`
 	Gid        uint32 `yaml:"gid"`
 }
