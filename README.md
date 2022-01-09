@@ -4,6 +4,7 @@
 
 Immudb based FUSE filesystem, written in Go.
 The project is base on the [https://github.com/jacobsa/fuse](https://github.com/jacobsa/fuse) library, and in particular it has been inspired by the `memFS` implementation.
+All tests have been performed using macos 12.1 and macFUSE 4.2.1.
 
 ## How to build
 
