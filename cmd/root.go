@@ -103,7 +103,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, flagConfig, "c", "config.yaml", "config file")
-	rootCmd.PersistentFlags().StringP(flagServerAddr, "s", "127.0.0.1:3322", "immudb server address")
+	rootCmd.PersistentFlags().StringP(flagServerAddr, "s", "127.0.0.1", "immudb server address")
 	rootCmd.PersistentFlags().StringP(flagUser, "u", "immudb", "immudb user")
 	rootCmd.PersistentFlags().StringP(flagPassword, "p", "immudb", "immudb password")
 	rootCmd.PersistentFlags().StringP(flagDatabase, "d", "defaultdb", "immudb database name")
