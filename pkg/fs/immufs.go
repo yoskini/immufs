@@ -493,7 +493,7 @@ func (fs *Immufs) Rename(
 	childID, childType, ok := oldParent.LookUpChild(op.OldName)
 
 	if !ok {
-		fs.log.WithField("API", "Rename").Warningf("Entry %s not found", op.OldName)
+		fs.log.WithField("API", "Rename").Warningf("Entry '%s' not found in parent: %d", op.OldName, op.OldParent)
 
 		return fuse.ENOENT
 	}
