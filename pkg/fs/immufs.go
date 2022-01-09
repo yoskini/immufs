@@ -858,5 +858,24 @@ func (fs *Immufs) Fallocate(ctx context.Context,
 	defer fs.mu.Unlock()
 	inode := fs.getInodeOrDie(op.Inode)
 	inode.Fallocate(op.Mode, op.Offset, op.Length)
+
+	return nil
+}
+
+func (fs *Immufs) ForgetInode(ctx context.Context,
+	op *fuseops.ForgetInodeOp) error {
+	fs.log.Infof("--> ForgetInode")
+	if op.OpContext.Pid == 0 {
+		fs.log.WithField("API", "ForgetInode").Warningf("Invalid PID 0")
+
+		return fuse.EINVAL
+	}
+
+	inode := fs.getInodeOrDie(op.Inode)
+	cnt := inode.DecrRef(op.N)
+	if cnt == 0 && inode.ToBeDeleted {
+		inode.Del()
+	}
+
 	return nil
 }
