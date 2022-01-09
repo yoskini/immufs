@@ -73,7 +73,7 @@ func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, e
 
 	defer res.Close()
 	if found := res.Next(); !found {
-		idb.log.Errorf("Inode %d not found", inumber)
+		idb.log.Warnf("Inode %d not found", inumber)
 
 		return nil, ErrInodeNotFound
 	}

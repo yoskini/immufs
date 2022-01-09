@@ -116,7 +116,7 @@ func (fs *Immufs) StatFS(
 func (fs *Immufs) LookUpInode(
 	ctx context.Context,
 	op *fuseops.LookUpInodeOp) error {
-	fs.log.Infof("--> LookupInode: %s", op.Name)
+	fs.log.Infof("--> LookupInode: %s in parent inode: %d", op.Name, op.Parent)
 	if op.OpContext.Pid == 0 {
 		fs.log.WithField("API", "LookupInode").Warningf("Invalid PID 0")
 
@@ -722,6 +722,7 @@ func (fs *Immufs) FlushFile(
 
 		return fuse.EINVAL
 	}
+
 	return
 }
 
