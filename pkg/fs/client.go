@@ -239,3 +239,23 @@ func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
 
 	return inumber + 1, nil
 }
+
+func (idb *ImmuDbClient) SpaceUsed(ctx context.Context) (int64, error) {
+	res, err := idb.cl.QueryContext(ctx, "SELECT SUM(size) FROM inode")
+	if err != nil {
+		return -1, err
+	}
+
+	var totalSpace int64
+
+	defer res.Close()
+	if found := res.Next(); !found {
+		return 0, nil
+	}
+
+	err = res.Scan(
+		&totalSpace,
+	)
+
+	return totalSpace, nil
+}
