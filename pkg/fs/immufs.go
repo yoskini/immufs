@@ -5,6 +5,7 @@ import (
 	"errors"
 	"immufs/pkg/config"
 	"io"
+	"math"
 	"os"
 	"sync"
 	"syscall"
@@ -162,6 +163,13 @@ func (fs *Immufs) LookUpInode(
 	// Grab the child.
 	child := fs.getInodeOrDie(childID)
 
+	// Increment ref cnt
+	child.Nlink++
+
+	// Update access time
+	child.Atime = time.Now()
+	child.writeOrDie()
+
 	// Fill in the response.
 	op.Entry.Child = childID
 	op.Entry.Attributes = child.Attributes()
@@ -199,6 +207,10 @@ func (fs *Immufs) GetInodeAttributes(
 	// (since it also handles invalidation).
 	op.AttributesExpiration = time.Now().Add(365 * 24 * time.Hour)
 
+	// Update atime
+	inode.Atime = time.Now()
+	inode.writeOrDie()
+
 	fs.log.WithField("API", "GetInodeAttributes").Infof("Attributes got: %+v", *op)
 	return nil
 }
@@ -229,6 +241,8 @@ func (fs *Immufs) SetInodeAttributes(
 
 	// Handle the request.
 	inode.SetAttributes(op.Size, op.Mode, op.Mtime)
+
+	// atime is managed by the SetAttributes func
 
 	// Fill in the response.
 	op.Attributes = inode.Attributes()
@@ -267,10 +281,14 @@ func (fs *Immufs) MkDir(
 
 	// Set up attributes from the child.
 	childAttrs := fuseops.InodeAttributes{
-		Nlink: 1,
-		Mode:  op.Mode,
-		Uid:   fs.uid,
-		Gid:   fs.gid,
+		Nlink:  1,
+		Atime:  time.Now(),
+		Mtime:  time.Now(),
+		Ctime:  time.Now(),
+		Crtime: time.Now(),
+		Mode:   op.Mode,
+		Uid:    fs.uid,
+		Gid:    fs.gid,
 	}
 
 	// Allocate a child.
@@ -567,6 +585,7 @@ func (fs *Immufs) RmDir(
 	// Mark the child as unlinked.
 	child.Nlink--
 	child.ToBeDeleted = true
+	child.Atime = time.Now()
 	child.writeOrDie()
 
 	return nil
@@ -605,6 +624,7 @@ func (fs *Immufs) Unlink(
 	// Mark the child as unlinked.
 	child.Nlink--
 	child.ToBeDeleted = true
+	child.Atime = time.Now()
 	child.writeOrDie()
 
 	return nil
@@ -633,6 +653,9 @@ func (fs *Immufs) OpenDir(
 		panic("Found non-dir.")
 	}
 
+	inode.Atime = time.Now()
+	inode.writeOrDie()
+
 	return nil
 }
 
@@ -654,6 +677,10 @@ func (fs *Immufs) ReadDir(
 
 	// Serve the request.
 	op.BytesRead = inode.ReadDir(op.Dst, int(op.Offset))
+
+	// Update atime
+	inode.Atime = time.Now()
+	inode.writeOrDie()
 
 	return nil
 }
@@ -681,6 +708,10 @@ func (fs *Immufs) OpenFile(
 	if !inode.isFile() {
 		panic("Found non-file.")
 	}
+
+	// Update atime
+	inode.Atime = time.Now()
+	inode.writeOrDie()
 
 	return nil
 }
@@ -710,6 +741,10 @@ func (fs *Immufs) ReadFile(
 		return nil
 	}
 
+	// Update atime
+	inode.Atime = time.Now()
+	inode.writeOrDie()
+
 	return err
 }
 
@@ -731,6 +766,8 @@ func (fs *Immufs) WriteFile(
 
 	// Serve the request.
 	_, err := inode.WriteAt(op.Data, op.Offset)
+
+	inode.writeOrDie()
 
 	return err
 }

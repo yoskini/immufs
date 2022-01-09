@@ -207,6 +207,7 @@ func (in *Inode) Attributes() fuseops.InodeAttributes {
 }
 
 // Add an entry for a child.
+// It updated the Atime and Mtime of the parent
 //
 // REQUIRES: in.isDir()
 // REQUIRES: dt != fuseutil.DT_Unknown
@@ -218,6 +219,9 @@ func (in *Inode) AddChild(
 
 	// Update the modification time.
 	in.Mtime = time.Now()
+
+	// Update the access time.
+	in.Atime = time.Now()
 
 	// Set up the entry.
 	e := fuseutil.Dirent{
@@ -252,12 +256,16 @@ func (in *Inode) AddChild(
 }
 
 // Remove an entry for a child.
+// It also updates the Atime and Mtime of the parent.
 //
 // REQUIRES: in.isDir()
 // REQUIRES: An entry for the given name exists.
 func (in *Inode) RemoveChild(name string) {
 	// Update the modification time.
 	in.Mtime = time.Now()
+
+	// Update the acccess time
+	in.Atime = time.Now()
 
 	// Find the entry.
 	i, ok := in.findChild(name)
@@ -285,6 +293,11 @@ func (in *Inode) ReadDir(p []byte, offset int) int {
 
 	var n int
 	entries := in.getChildrenOrDie()
+
+	// Update the acccess time
+	in.Atime = time.Now()
+	in.writeOrDie()
+
 	for i := offset; i < len(entries); i++ {
 		e := entries[i]
 
@@ -336,6 +349,7 @@ func (in *Inode) WriteAt(p []byte, off int64) (int, error) {
 	}
 
 	// Update the modification time.
+	in.Atime = time.Now()
 	in.Mtime = time.Now()
 	content := in.readContentOrDie()
 
@@ -367,7 +381,9 @@ func (in *Inode) SetAttributes(
 	mode *os.FileMode,
 	mtime *time.Time) {
 	// Update the modification time.
+	in.Atime = time.Now()
 	in.Mtime = time.Now()
+	in.Ctime = time.Now()
 
 	// Truncate?
 	if size != nil {
@@ -402,6 +418,7 @@ func (in *Inode) SetAttributes(
 	in.writeOrDie()
 }
 
+// Allocate space for the file. Updates the Atime
 func (in *Inode) Fallocate(mode uint32, offset uint64, length uint64) error {
 	if mode != 0 {
 		return fuse.ENOSYS
@@ -412,6 +429,10 @@ func (in *Inode) Fallocate(mode uint32, offset uint64, length uint64) error {
 		padding := make([]byte, newSize-len(content))
 		content = append(content, padding...)
 		in.Size = int64(offset + length)
+
+		in.Atime = time.Now()
+		in.Mtime = time.Now()
+		in.Ctime = time.Now()
 
 		in.writeOrDie()
 		in.writeContentOrDie(content)
