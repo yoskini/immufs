@@ -25,7 +25,8 @@ type Inode struct {
 	Uid     int64
 	Gid     int64
 
-	cl *ImmuDbClient
+	ToBeDeleted bool
+	cl          *ImmuDbClient
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -136,18 +137,18 @@ func NewInode(inumber int64, attrs fuseops.InodeAttributes, db *ImmuDbClient) *I
 
 	// Create the object.
 	inode := Inode{
-		Inumber: inumber,
-		Size:    int64(attrs.Size),
-		Nlink:   int64(attrs.Nlink),
-		Mode:    int64(attrs.Mode),
-		Atime:   attrs.Atime,
-		Mtime:   attrs.Mtime,
-		Ctime:   attrs.Ctime,
-		Crtime:  attrs.Crtime,
-		Uid:     int64(attrs.Uid),
-		Gid:     int64(attrs.Gid),
-
-		cl: db,
+		Inumber:     inumber,
+		Size:        int64(attrs.Size),
+		Nlink:       int64(attrs.Nlink),
+		Mode:        int64(attrs.Mode),
+		Atime:       attrs.Atime,
+		Mtime:       attrs.Mtime,
+		Ctime:       attrs.Ctime,
+		Crtime:      attrs.Crtime,
+		Uid:         int64(attrs.Uid),
+		Gid:         int64(attrs.Gid),
+		ToBeDeleted: false,
+		cl:          db,
 
 		// TODO manage extended attr?
 		//xattrs: make(map[string][]byte),

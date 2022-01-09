@@ -544,6 +544,7 @@ func (fs *Immufs) RmDir(
 
 	// Mark the child as unlinked.
 	child.Nlink--
+	child.ToBeDeleted = true
 	child.writeOrDie()
 
 	return nil
@@ -581,6 +582,7 @@ func (fs *Immufs) Unlink(
 
 	// Mark the child as unlinked.
 	child.Nlink--
+	child.ToBeDeleted = true
 	child.writeOrDie()
 
 	return nil

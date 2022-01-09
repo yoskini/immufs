@@ -89,6 +89,7 @@ func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, e
 		&inode.Crtime,
 		&inode.Uid,
 		&inode.Gid,
+		&inode.ToBeDeleted,
 	)
 	inode.cl = idb
 	if err != nil {
@@ -192,8 +193,8 @@ func (idb *ImmuDbClient) WriteContent(ctx context.Context, inumber int64, data [
 }
 
 func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
-	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO inode(inumber, size, nlink, mode, atime, mtime, ctime, crtime, uid, gid) VALUES(?,?,?,?,?,?,?,?,?,?)",
-		inode.Inumber, inode.Size, inode.Nlink, inode.Mode, inode.Atime, inode.Mtime, inode.Ctime, inode.Crtime, inode.Uid, inode.Gid)
+	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO inode(inumber, size, nlink, mode, atime, mtime, ctime, crtime, uid, gid, to_be_deleted) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+		inode.Inumber, inode.Size, inode.Nlink, inode.Mode, inode.Atime, inode.Mtime, inode.Ctime, inode.Crtime, inode.Uid, inode.Gid, inode.ToBeDeleted)
 	if err != nil {
 		idb.log.Errorf("could not write inode: %s", err)
 	}
