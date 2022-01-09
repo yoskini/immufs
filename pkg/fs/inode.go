@@ -153,6 +153,9 @@ func NewInode(inumber int64, attrs fuseops.InodeAttributes, db *ImmuDbClient) *I
 		//xattrs: make(map[string][]byte),
 	}
 	inode.writeOrDie()
+	if inode.isDir() {
+		inode.writeChildrenOrDie([]fuseutil.Dirent{})
+	}
 
 	return &inode
 }
