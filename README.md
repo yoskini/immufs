@@ -21,7 +21,7 @@ To start the application, create a mountpoint and run:
 
 ```bash
 $> mkdir mnt
-$> ./immufs -s defaultdb -m mnt -u immudb -p immudb
+$> ./immufs -s 127.0.0.1 -m mnt -u immudb -p immudb
 ```
 
 or, in alternative, use:
