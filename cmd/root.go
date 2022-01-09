@@ -125,7 +125,7 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	} else {
 		viper.SetConfigType("yaml")
-		viper.SetConfigName("config.yaml")
+		viper.SetConfigName("config")
 	}
 
 	if err := viper.ReadInConfig(); err == nil {
