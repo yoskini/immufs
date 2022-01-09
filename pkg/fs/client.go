@@ -19,6 +19,7 @@ var (
 	ErrInodeNotFound = errors.New("Inode not found")
 )
 
+// ImmuDbClient is a client for talking to Immudb and perform all the FS I/O.
 type ImmuDbClient struct {
 	cl  *sql.DB
 	log *logrus.Entry
@@ -50,6 +51,7 @@ func NewImmuDbClient(ctx context.Context, cfg *config.Config, log *logrus.Logger
 	}, nil
 }
 
+// Destroy must be called after all pending operations on Immufs are completed.
 func (idb *ImmuDbClient) Destroy(ctx context.Context) error {
 	err := idb.cl.Close()
 	if err != nil {
@@ -61,6 +63,7 @@ func (idb *ImmuDbClient) Destroy(ctx context.Context) error {
 	return nil
 }
 
+// GetInode retrieves an Inode from immudb, given its inumber.
 func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT * FROM inode WHERE inumber=?", inumber)
 	if err != nil {
@@ -101,6 +104,7 @@ func (idb *ImmuDbClient) GetInode(ctx context.Context, inumber int64) (*Inode, e
 	return &inode, nil
 }
 
+// GetChildren retrieves a directory content. It must only be called on directories.
 func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseutil.Dirent, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT content FROM content WHERE inumber=?", parent)
 	if err != nil {
@@ -135,6 +139,7 @@ func (idb *ImmuDbClient) GetChildren(ctx context.Context, parent int64) ([]fuseu
 	return dirents, err
 }
 
+// WriteChildren flushes the content of a directory to Immudb.
 func (idb *ImmuDbClient) WriteChildren(ctx context.Context, parentInumber int64, children []fuseutil.Dirent) error {
 	content, err := marshalDirents(children)
 	if err != nil {
@@ -153,7 +158,7 @@ func (idb *ImmuDbClient) WriteChildren(ctx context.Context, parentInumber int64,
 	return nil
 }
 
-// File content can be read as a whole
+// ReadContent reads as a whole file from Immudb and loads it in memory.
 func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT content FROM content WHERE inumber=?", inumber)
 	if err != nil {
@@ -182,7 +187,7 @@ func (idb *ImmuDbClient) ReadContent(ctx context.Context, inumber int64) ([]byte
 	return content, err
 }
 
-// File content can be written as a whole
+// WriteContent writes a whole file into Immudb.
 func (idb *ImmuDbClient) WriteContent(ctx context.Context, inumber int64, data []byte) error {
 	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO content(inumber, content) VALUES(?, ?)", inumber, data)
 	if err != nil {
@@ -192,6 +197,7 @@ func (idb *ImmuDbClient) WriteContent(ctx context.Context, inumber int64, data [
 	return err
 }
 
+// WriteInode flushed an inode to Immudb. It does not change the file content.
 func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
 	_, err := idb.cl.ExecContext(ctx, "UPSERT INTO inode(inumber, size, nlink, mode, atime, mtime, ctime, crtime, uid, gid, to_be_deleted) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
 		inode.Inumber, inode.Size, inode.Nlink, inode.Mode, inode.Atime, inode.Mtime, inode.Ctime, inode.Crtime, inode.Uid, inode.Gid, inode.ToBeDeleted)
@@ -202,6 +208,7 @@ func (idb *ImmuDbClient) WriteInode(ctx context.Context, inode *Inode) error {
 	return err
 }
 
+// DeleteInode removes an inode from Immudb. Id does not remove the actual file content
 func (idb *ImmuDbClient) DeleteInode(ctx context.Context, inumber int64) error {
 	_, err := idb.cl.ExecContext(ctx, "DELETE FROM inode WHERE inumber=?", inumber)
 	if err != nil {
@@ -220,6 +227,7 @@ func (idb *ImmuDbClient) DeleteInode(ctx context.Context, inumber int64) error {
 	return nil
 }
 
+// NextInumber computer the next inumber available for Immufs
 func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT MAX(inumber) FROM inode")
 	if err != nil {
@@ -240,6 +248,7 @@ func (idb *ImmuDbClient) NextInumber(ctx context.Context) (int64, error) {
 	return inumber + 1, nil
 }
 
+// SpaceUsed calculates the total amount of space consumed by all the files together.
 func (idb *ImmuDbClient) SpaceUsed(ctx context.Context) (int64, error) {
 	res, err := idb.cl.QueryContext(ctx, "SELECT SUM(size) FROM inode")
 	if err != nil {

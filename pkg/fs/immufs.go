@@ -17,6 +17,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Immufs is a filesystem backed by Immudb. All inodes are kept in the `inode` table.
+// The file content is stored in the `content` table.
 type Immufs struct {
 	fuseutil.NotImplementedFileSystem
 
@@ -68,7 +70,10 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 	return fs, nil
 }
 
+////////////////////////////////////////////////////////////////////////
 // Utilities
+////////////////////////////////////////////////////////////////////////
+
 // Find the given inode. Panic if it doesn't exist.
 //
 // LOCKS_REQUIRED(fs.mu)
@@ -81,7 +86,8 @@ func (fs *Immufs) getInodeOrDie(id fuseops.InodeID) *Inode {
 	return inode
 }
 
-// Calculate the next available inumber
+// nextInumber calculates the next available inumber. The function takes the maximum inumber from the db and increments it by 1.
+// In this implementation, inodes are never re-used.
 //
 // LOCKS_REQUIRED(fs.mu)
 func (fs *Immufs) nextInumber() int64 {
@@ -395,6 +401,8 @@ func (fs *Immufs) CreateFile(
 	return err
 }
 
+//NOTE These methods are currently not implemented as we must have a rock solid
+// nlink management before proceeding
 /*
 func (fs *Immufs) CreateSymlink(
 	ctx context.Context,
@@ -494,6 +502,8 @@ func (fs *Immufs) CreateLink(
 }
 */
 
+//BUG: This function has a weird behaviour: it might not find the inode to rename or even crash.
+// The received parameters appear corrupted...
 func (fs *Immufs) Rename(
 	ctx context.Context,
 	op *fuseops.RenameOp) error {
@@ -654,6 +664,7 @@ func (fs *Immufs) OpenDir(
 		panic("Found non-dir.")
 	}
 
+	// Update atime
 	inode.Atime = time.Now()
 	inode.writeOrDie()
 
@@ -773,7 +784,8 @@ func (fs *Immufs) WriteFile(
 	return err
 }
 
-// TODO shoud I support file handler management here?
+// FlushFile is not required as we immediately write the bytes into the database.
+// There's not local caching, hence there's no need to write any buffer.
 func (fs *Immufs) FlushFile(
 	ctx context.Context,
 	op *fuseops.FlushFileOp) (err error) {
