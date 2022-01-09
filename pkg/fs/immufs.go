@@ -52,9 +52,10 @@ func NewImmufs(ctx context.Context, cfg *config.Config, logger *logrus.Logger) (
 
 		// Set up the root inode.
 		rootAttrs := fuseops.InodeAttributes{
-			Mode: 0700 | os.ModeDir,
-			Uid:  fs.uid,
-			Gid:  fs.gid,
+			Mode:  0700 | os.ModeDir,
+			Uid:   fs.uid,
+			Gid:   fs.gid,
+			Nlink: 1,
 		}
 		// Adding root if not exists
 		root := NewInode(fuseops.RootInodeID, rootAttrs, fs.idb)
