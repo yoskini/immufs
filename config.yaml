@@ -1,0 +1,8 @@
+immudb-addr: 127.0.0.1
+user: immudb
+password: immudb
+database: defaultdb
+mountpoint: mnt
+#logFile:
+#uid:
+#gid:
