@@ -110,6 +110,27 @@ func (fs *Immufs) StatFS(
 	ctx context.Context,
 	op *fuseops.StatFSOp) error {
 	fs.log.Infof("--> StatFS")
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	op.BlockSize = 1
+	op.Blocks = uint64(math.Pow(2, 31)) // Max FS size is 2GB
+
+	space, err := fs.idb.SpaceUsed(context.TODO())
+	if err != nil {
+		space = 0 // We decide that in case of error the FS appears empty
+	}
+	op.BlocksFree = op.Blocks - uint64(space)
+	op.BlocksAvailable = op.BlocksFree
+
+	op.IoSize = 1
+
+	op.Inodes = uint64(fs.nextInumber() - 1)
+	op.InodesFree = math.MaxInt64 - op.Inodes
+
+	fs.log.WithField("API", "StatFS").Debugf("Stat: %+v", op)
+
 	return nil
 }
 
