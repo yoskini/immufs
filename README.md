@@ -1,5 +1,7 @@
 # ImmuFS
 
+<img align="right" src="icon.png" width="256px"/>
+
 Immudb based FUSE filesystem, written in Go.
 The project is base on the [https://github.com/jacobsa/fuse](https://github.com/jacobsa/fuse) library, and in particular it has been inspired by the `memFS` implementation.
 
