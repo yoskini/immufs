@@ -497,7 +497,7 @@ func (fs *Immufs) CreateLink(
 func (fs *Immufs) Rename(
 	ctx context.Context,
 	op *fuseops.RenameOp) error {
-	fs.log.Infof("--> Rename")
+	fs.log.Infof("--> Rename: %+v", *op)
 	if op.OpContext.Pid == 0 {
 		fs.log.WithField("API", "Rename").Warningf("Invalid PID 0")
 
