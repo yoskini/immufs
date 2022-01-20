@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -65,7 +66,7 @@ func main() {
 		if *str {
 			logrus.Infof("Before TX=%d the file content was:\n%s", *tx, string(content))
 		} else {
-			logrus.Infof("Before TX=%d the file content was:\n%v", *tx, content)
+			logrus.Infof("Before TX=%d the file content was:\n%v", *tx, hex.EncodeToString(content))
 		}
 	}
 	if !found {
