@@ -69,6 +69,6 @@ func main() {
 		}
 	}
 	if !found {
-		logrus.Infof("No entries founf for file %d at TX=%d", *inumber, *tx)
+		logrus.Infof("No entries found for file %d at TX=%d", *inumber, *tx)
 	}
 }
