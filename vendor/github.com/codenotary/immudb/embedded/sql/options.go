@@ -16,22 +16,39 @@ limitations under the License.
 
 package sql
 
-var defultDistinctLimit = 1 << 20 // ~ 1mi rows
+import (
+	"fmt"
+
+	"github.com/codenotary/immudb/embedded/store"
+)
+
+var defaultDistinctLimit = 1 << 20 // ~ 1mi rows
 
 type Options struct {
-	prefix        []byte
-	distinctLimit int
-	autocommit    bool
+	prefix                        []byte
+	distinctLimit                 int
+	autocommit                    bool
+	lazyIndexConstraintValidation bool
+
+	multidbHandler MultiDBHandler
 }
 
 func DefaultOptions() *Options {
 	return &Options{
-		distinctLimit: defultDistinctLimit,
+		distinctLimit: defaultDistinctLimit,
 	}
 }
 
-func ValidOpts(opts *Options) bool {
-	return opts != nil && opts.distinctLimit > 0
+func (opts *Options) Validate() error {
+	if opts == nil {
+		return fmt.Errorf("%w: nil options", store.ErrInvalidOptions)
+	}
+
+	if opts.distinctLimit <= 0 {
+		return fmt.Errorf("%w: invalid DistinctLimit value", store.ErrInvalidOptions)
+	}
+
+	return nil
 }
 
 func (opts *Options) WithPrefix(prefix []byte) *Options {
@@ -46,5 +63,15 @@ func (opts *Options) WithDistinctLimit(distinctLimit int) *Options {
 
 func (opts *Options) WithAutocommit(autocommit bool) *Options {
 	opts.autocommit = autocommit
+	return opts
+}
+
+func (opts *Options) WithLazyIndexConstraintValidation(lazyIndexConstraintValidation bool) *Options {
+	opts.lazyIndexConstraintValidation = lazyIndexConstraintValidation
+	return opts
+}
+
+func (opts *Options) WithMultiDBHandler(multidbHandler MultiDBHandler) *Options {
+	opts.multidbHandler = multidbHandler
 	return opts
 }

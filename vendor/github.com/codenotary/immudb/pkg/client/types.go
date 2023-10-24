@@ -22,9 +22,9 @@ import (
 	"github.com/codenotary/immudb/pkg/client/tokenservice"
 	"github.com/codenotary/immudb/pkg/stream"
 
+	"github.com/codenotary/immudb/embedded/logger"
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/pkg/client/state"
-	"github.com/codenotary/immudb/pkg/logger"
 	"google.golang.org/grpc"
 )
 
@@ -73,5 +73,10 @@ func (c *immuClient) WithStreamServiceFactory(ssf stream.ServiceFactory) *immuCl
 // WithOptions sets up client options for the instance.
 func (c *immuClient) WithOptions(options *Options) *immuClient {
 	c.Options = options
+	return c
+}
+
+func (c *immuClient) WithErrorHandler(handler ErrorHandler) *immuClient {
+	c.errorHandler = handler
 	return c
 }

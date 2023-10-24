@@ -5,9 +5,9 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
+// Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -36,7 +36,8 @@ func setResult(l yyLexer, stmts []SQLStmt) {
     values []ValueExp
     value ValueExp
     id string
-    number uint64
+    integer uint64
+    float float64
     str string
     boolean bool
     blob []byte
@@ -68,12 +69,12 @@ func setResult(l yyLexer, stmts []SQLStmt) {
     onConflict *OnConflictDo
 }
 
-%token CREATE USE DATABASE SNAPSHOT SINCE AFTER BEFORE UNTIL TX OF TIMESTAMP TABLE UNIQUE INDEX ON ALTER ADD RENAME TO COLUMN PRIMARY KEY
+%token CREATE DROP USE DATABASE SNAPSHOT HISTORY SINCE AFTER BEFORE UNTIL TX OF TIMESTAMP TABLE UNIQUE INDEX ON ALTER ADD RENAME TO COLUMN PRIMARY KEY
 %token BEGIN TRANSACTION COMMIT ROLLBACK
 %token INSERT UPSERT INTO VALUES DELETE UPDATE SET CONFLICT DO NOTHING
 %token SELECT DISTINCT FROM JOIN HAVING WHERE GROUP BY LIMIT OFFSET ORDER ASC DESC AS UNION ALL
 %token NOT LIKE IF EXISTS IN IS
-%token AUTO_INCREMENT NULL CAST
+%token AUTO_INCREMENT NULL CAST SCAST
 %token <id> NPARAM
 %token <pparam> PPARAM
 %token <joinType> JOINTYPE
@@ -81,12 +82,14 @@ func setResult(l yyLexer, stmts []SQLStmt) {
 %token <cmpOp> CMPOP
 %token <id> IDENTIFIER
 %token <sqlType> TYPE
-%token <number> NUMBER
+%token <integer> INTEGER
+%token <float> FLOAT
 %token <str> VARCHAR
 %token <boolean> BOOLEAN
 %token <blob> BLOB
 %token <aggFn> AGGREGATE_FUNC
 %token <err> ERROR
+%token <dot> DOT
 
 %left  ','
 %right AS
@@ -126,7 +129,8 @@ func setResult(l yyLexer, stmts []SQLStmt) {
 %type <exp> exp opt_where opt_having boundexp
 %type <binExp> binExp
 %type <cols> opt_groupby
-%type <number> opt_limit opt_offset opt_max_len
+%type <exp> opt_limit opt_offset
+%type <integer> opt_max_len
 %type <id> opt_as
 %type <ordcols> ordcols opt_orderby
 %type <opt_ord> opt_ord
@@ -207,6 +211,11 @@ ddlstmt:
         $$ = &CreateTableStmt{ifNotExists: $3, table: $4, colsSpec: $6, pkColNames: $10}
     }
 |
+    DROP TABLE IDENTIFIER
+    {
+        $$ = &DropTableStmt{table: $3}
+    }
+|
     CREATE INDEX opt_if_not_exists ON IDENTIFIER '(' ids ')'
     {
         $$ = &CreateIndexStmt{ifNotExists: $3, table: $5, cols: $7}
@@ -217,14 +226,34 @@ ddlstmt:
         $$ = &CreateIndexStmt{unique: true, ifNotExists: $4, table: $6, cols: $8}
     }
 |
+    DROP INDEX ON IDENTIFIER '(' ids ')'
+    {
+        $$ = &DropIndexStmt{table: $4, cols: $6}
+    }
+|
+    DROP INDEX IDENTIFIER DOT IDENTIFIER
+    {
+        $$ = &DropIndexStmt{table: $3, cols: []string{$5}}
+    }
+|
     ALTER TABLE IDENTIFIER ADD COLUMN colSpec
     {
         $$ = &AddColumnStmt{table: $3, colSpec: $6}
     }
 |
+    ALTER TABLE IDENTIFIER RENAME TO IDENTIFIER
+    {
+        $$ = &RenameTableStmt{oldName: $3, newName: $6}
+    }
+|
     ALTER TABLE IDENTIFIER RENAME COLUMN IDENTIFIER TO IDENTIFIER
     {
         $$ = &RenameColumnStmt{table: $3, oldName: $6, newName: $8}
+    }
+|
+    ALTER TABLE IDENTIFIER DROP COLUMN IDENTIFIER
+    {
+        $$ = &DropColumnStmt{table: $3, colName: $6}
     }
 
 opt_if_not_exists:
@@ -261,12 +290,12 @@ dmlstmt:
 |
     DELETE FROM tableRef opt_where opt_indexon opt_limit opt_offset
     {
-        $$ = &DeleteFromStmt{tableRef: $3, where: $4, indexOn: $5, limit: int($6), offset: int($7)}
+        $$ = &DeleteFromStmt{tableRef: $3, where: $4, indexOn: $5, limit: $6, offset: $7}
     }
 |
     UPDATE tableRef SET updates opt_where opt_indexon opt_limit opt_offset
     {
-        $$ = &UpdateStmt{tableRef: $2, updates: $4, where: $5, indexOn: $6, limit: int($7), offset: int($8)}
+        $$ = &UpdateStmt{tableRef: $2, updates: $4, where: $5, indexOn: $6, limit: $7, offset: $8}
     }
 
 opt_on_conflict:
@@ -366,10 +395,15 @@ values:
         $$ = append($1, $3)
     }
 
-val: 
-    NUMBER
+val:
+    INTEGER
     {
-        $$ = &Number{val: int64($1)}
+        $$ = &Integer{val: int64($1)}
+    }
+|
+    FLOAT
+    {
+        $$ = &Float64{val: float64($1)}
     }
 |
     VARCHAR
@@ -440,7 +474,12 @@ opt_max_len:
         $$ = 0
     }
 |
-    '[' NUMBER ']'
+    '[' INTEGER ']'
+    {
+        $$ = $2
+    }
+|
+    '(' INTEGER ')'
     {
         $$ = $2
     }
@@ -497,8 +536,8 @@ select_stmt: SELECT opt_distinct opt_selectors FROM ds opt_indexon opt_joins opt
                 groupBy: $9,
                 having: $10,
                 orderBy: $11,
-                limit: int($12),
-                offset: int($13),
+                limit: $12,
+                offset: $13,
             }
     }
 
@@ -559,7 +598,7 @@ selector:
 |
     AGGREGATE_FUNC '(' col ')'
     {
-        $$ = &AggColSelector{aggFn: $1, db: $3.db, table: $3.table, col: $3.col}
+        $$ = &AggColSelector{aggFn: $1, table: $3.table, col: $3.col}
     }
 
 col:
@@ -568,7 +607,7 @@ col:
         $$ = &ColSelector{col: $1}
     }
 |
-    IDENTIFIER '.' IDENTIFIER
+    IDENTIFIER DOT IDENTIFIER
     {
         $$ = &ColSelector{table: $1, col: $3}
     }
@@ -590,6 +629,11 @@ ds:
     fnCall opt_as
     {
         $$ = &FnDataSourceStmt{fnCall: $1.(*FnCall), as: $2}
+    }
+|
+    '(' HISTORY OF IDENTIFIER ')' opt_as
+    {
+        $$ = &tableRef{table: $4, history: true, as: $6}
     }
 
 tableRef:
@@ -714,20 +758,20 @@ opt_having:
 
 opt_limit:
     {
-        $$ = 0
+        $$ = nil
     }
 |
-    LIMIT NUMBER
+    LIMIT exp
     {
         $$ = $2
     }
 
 opt_offset:
     {
-        $$ = 0
+        $$ = nil
     }
 |
-    OFFSET NUMBER
+    OFFSET exp
     {
         $$ = $2
     }
@@ -811,7 +855,7 @@ exp:
 |
     '-' exp
     {
-        $$ = &NumExp{left: &Number{val: 0}, op: SUBSOP, right: $2}
+        $$ = &NumExp{left: &Integer{val: 0}, op: SUBSOP, right: $2}
     }
 |
     boundexp opt_not LIKE exp
@@ -821,7 +865,7 @@ exp:
 |
     EXISTS '(' dqlstmt ')'
     {
-        $$ = &ExistsBoolExp{q: ($3).(*SelectStmt)}
+        $$ = &ExistsBoolExp{q: ($3).(DataSource)}
     }
 |
     boundexp opt_not IN '(' dqlstmt ')'
@@ -848,6 +892,11 @@ boundexp:
     '(' exp ')'
     {
         $$ = $2
+    }
+|
+    boundexp SCAST TYPE
+    {
+        $$ = &Cast{val: $1, t: $3}
     }
 
 opt_not:

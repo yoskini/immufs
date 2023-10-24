@@ -16,6 +16,8 @@ limitations under the License.
 
 package sql
 
+import "context"
+
 type limitRowReader struct {
 	rowReader RowReader
 
@@ -38,20 +40,12 @@ func (lr *limitRowReader) Tx() *SQLTx {
 	return lr.rowReader.Tx()
 }
 
-func (lr *limitRowReader) Database() string {
-	return lr.rowReader.Database()
-}
-
 func (lr *limitRowReader) TableAlias() string {
 	return lr.rowReader.TableAlias()
 }
 
 func (lr *limitRowReader) Parameters() map[string]interface{} {
 	return lr.rowReader.Parameters()
-}
-
-func (lr *limitRowReader) SetParameters(params map[string]interface{}) error {
-	return lr.rowReader.SetParameters(params)
 }
 
 func (lr *limitRowReader) OrderBy() []ColDescriptor {
@@ -62,24 +56,24 @@ func (lr *limitRowReader) ScanSpecs() *ScanSpecs {
 	return lr.rowReader.ScanSpecs()
 }
 
-func (lr *limitRowReader) Columns() ([]ColDescriptor, error) {
-	return lr.rowReader.Columns()
+func (lr *limitRowReader) Columns(ctx context.Context) ([]ColDescriptor, error) {
+	return lr.rowReader.Columns(ctx)
 }
 
-func (lr *limitRowReader) colsBySelector() (map[string]ColDescriptor, error) {
-	return lr.rowReader.colsBySelector()
+func (lr *limitRowReader) colsBySelector(ctx context.Context) (map[string]ColDescriptor, error) {
+	return lr.rowReader.colsBySelector(ctx)
 }
 
-func (lr *limitRowReader) InferParameters(params map[string]SQLValueType) error {
-	return lr.rowReader.InferParameters(params)
+func (lr *limitRowReader) InferParameters(ctx context.Context, params map[string]SQLValueType) error {
+	return lr.rowReader.InferParameters(ctx, params)
 }
 
-func (lr *limitRowReader) Read() (*Row, error) {
+func (lr *limitRowReader) Read(ctx context.Context) (*Row, error) {
 	if lr.read >= lr.limit {
 		return nil, ErrNoMoreRows
 	}
 
-	row, err := lr.rowReader.Read()
+	row, err := lr.rowReader.Read(ctx)
 	if err != nil {
 		return nil, err
 	}

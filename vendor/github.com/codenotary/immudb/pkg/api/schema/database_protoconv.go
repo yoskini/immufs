@@ -141,6 +141,15 @@ func DualProofToProto(dualProof *store.DualProof) *DualProof {
 	}
 }
 
+func DualProofV2ToProto(dualProof *store.DualProofV2) *DualProofV2 {
+	return &DualProofV2{
+		SourceTxHeader:   TxHeaderToProto(dualProof.SourceTxHeader),
+		TargetTxHeader:   TxHeaderToProto(dualProof.TargetTxHeader),
+		InclusionProof:   DigestsToProto(dualProof.InclusionProof),
+		ConsistencyProof: DigestsToProto(dualProof.ConsistencyProof),
+	}
+}
+
 func TxHeaderToProto(hdr *store.TxHeader) *TxHeader {
 	if hdr == nil {
 		return nil
@@ -164,7 +173,15 @@ func TxMetadataToProto(md *store.TxMetadata) *TxMetadata {
 		return nil
 	}
 
-	return &TxMetadata{}
+	txmd := &TxMetadata{}
+	if md.HasTruncatedTxID() {
+		txID, _ := md.GetTruncatedTxID()
+		txmd.TruncatedTxID = txID
+	}
+
+	txmd.Extra = md.Extra()
+
+	return txmd
 }
 
 func LinearProofToProto(linearProof *store.LinearProof) *LinearProof {
@@ -206,6 +223,15 @@ func DualProofFromProto(dproof *DualProof) *store.DualProof {
 	}
 }
 
+func DualProofV2FromProto(dproof *DualProofV2) *store.DualProofV2 {
+	return &store.DualProofV2{
+		SourceTxHeader:   TxHeaderFromProto(dproof.SourceTxHeader),
+		TargetTxHeader:   TxHeaderFromProto(dproof.TargetTxHeader),
+		InclusionProof:   DigestsFromProto(dproof.InclusionProof),
+		ConsistencyProof: DigestsFromProto(dproof.ConsistencyProof),
+	}
+}
+
 func TxHeaderFromProto(hdr *TxHeader) *store.TxHeader {
 	return &store.TxHeader{
 		ID:       hdr.Id,
@@ -225,7 +251,14 @@ func TxMetadataFromProto(md *TxMetadata) *store.TxMetadata {
 		return nil
 	}
 
-	return &store.TxMetadata{}
+	txmd := store.NewTxMetadata()
+	if md.TruncatedTxID > 0 {
+		txmd.WithTruncatedTxID(md.TruncatedTxID)
+	}
+
+	txmd.WithExtra(md.Extra)
+
+	return txmd
 }
 
 func LinearProofFromProto(lproof *LinearProof) *store.LinearProof {

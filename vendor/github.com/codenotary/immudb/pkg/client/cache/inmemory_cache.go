@@ -33,7 +33,8 @@ type inMemoryCache struct {
 // NewInMemoryCache returns a new in-memory cache
 func NewInMemoryCache() Cache {
 	return &inMemoryCache{
-		states: map[string]map[string]*schema.ImmutableState{},
+		states:     map[string]map[string]*schema.ImmutableState{},
+		identities: map[string]string{},
 	}
 }
 
@@ -62,11 +63,11 @@ func (imc *inMemoryCache) Set(serverUUID, db string, state *schema.ImmutableStat
 }
 
 func (imc *inMemoryCache) Lock(serverUUID string) (err error) {
-	return fmt.Errorf("not implemented")
+	return ErrNotImplemented
 }
 
 func (imc *inMemoryCache) Unlock() (err error) {
-	return fmt.Errorf("not implemented")
+	return ErrNotImplemented
 }
 
 func (imc *inMemoryCache) ServerIdentityCheck(serverIdentity, serverUUID string) error {

@@ -30,9 +30,12 @@ import (
 
 var reservedWords = map[string]int{
 	"CREATE":         CREATE,
+	"DROP":           DROP,
 	"USE":            USE,
 	"DATABASE":       DATABASE,
 	"SNAPSHOT":       SNAPSHOT,
+	"HISTORY":        HISTORY,
+	"OF":             OF,
 	"SINCE":          SINCE,
 	"AFTER":          AFTER,
 	"BEFORE":         BEFORE,
@@ -88,6 +91,7 @@ var reservedWords = map[string]int{
 	"IF":             IF,
 	"IS":             IS,
 	"CAST":           CAST,
+	"::":             SCAST,
 }
 
 var joinTypes = map[string]JoinType{
@@ -100,8 +104,10 @@ var types = map[string]SQLValueType{
 	"INTEGER":   IntegerType,
 	"BOOLEAN":   BooleanType,
 	"VARCHAR":   VarcharType,
+	"UUID":      UUIDType,
 	"BLOB":      BLOBType,
 	"TIMESTAMP": TimestampType,
+	"FLOAT":     Float64Type,
 }
 
 var aggregateFns = map[string]AggregateFn{
@@ -353,6 +359,25 @@ func (l *lexer) Lex(lval *yySymType) int {
 			lval.err = err
 			return ERROR
 		}
+		// looking for a float
+		if isDot(l.r.nextChar) {
+			l.r.ReadByte() // consume dot
+
+			decimalPart, err := l.readNumber()
+			if err != nil {
+				lval.err = err
+				return ERROR
+			}
+
+			val, err := strconv.ParseFloat(fmt.Sprintf("%c%s.%s", ch, tail, decimalPart), 64)
+			if err != nil {
+				lval.err = err
+				return ERROR
+			}
+
+			lval.float = val
+			return FLOAT
+		}
 
 		val, err := strconv.ParseUint(fmt.Sprintf("%c%s", ch, tail), 10, 64)
 		if err != nil {
@@ -360,8 +385,8 @@ func (l *lexer) Lex(lval *yySymType) int {
 			return ERROR
 		}
 
-		lval.number = val
-		return NUMBER
+		lval.integer = val
+		return INTEGER
 	}
 
 	if isComparison(ch) {
@@ -392,6 +417,21 @@ func (l *lexer) Lex(lval *yySymType) int {
 
 		lval.str = tail
 		return VARCHAR
+	}
+
+	if ch == ':' {
+		ch, err := l.r.ReadByte()
+		if err != nil {
+			lval.err = err
+			return ERROR
+		}
+
+		if ch != ':' {
+			lval.err = fmt.Errorf("colon expected")
+			return ERROR
+		}
+
+		return SCAST
 	}
 
 	if ch == '@' {
@@ -475,6 +515,24 @@ func (l *lexer) Lex(lval *yySymType) int {
 		l.namedParamsType = UnnamedParamType
 
 		return PPARAM
+	}
+
+	if isDot(ch) {
+		if isNumber(l.r.nextChar) { // looking for  a float
+			decimalPart, err := l.readNumber()
+			if err != nil {
+				lval.err = err
+				return ERROR
+			}
+			val, err := strconv.ParseFloat(fmt.Sprintf("%d.%s", 0, decimalPart), 64)
+			if err != nil {
+				lval.err = err
+				return ERROR
+			}
+			lval.float = val
+			return FLOAT
+		}
+		return DOT
 	}
 
 	return int(ch)
@@ -582,4 +640,8 @@ func isQuote(ch byte) bool {
 
 func isDoubleQuote(ch byte) bool {
 	return ch == 0x22
+}
+
+func isDot(ch byte) bool {
+	return ch == '.'
 }

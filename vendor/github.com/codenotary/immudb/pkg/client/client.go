@@ -38,16 +38,15 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 
+	"github.com/codenotary/immudb/embedded/logger"
 	"github.com/codenotary/immudb/embedded/store"
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/pkg/auth"
 	"github.com/codenotary/immudb/pkg/client/cache"
 	"github.com/codenotary/immudb/pkg/client/errors"
-	"github.com/codenotary/immudb/pkg/client/heartbeater"
 	"github.com/codenotary/immudb/pkg/client/state"
 	"github.com/codenotary/immudb/pkg/client/tokenservice"
 	"github.com/codenotary/immudb/pkg/database"
-	"github.com/codenotary/immudb/pkg/logger"
 	"github.com/codenotary/immudb/pkg/signer"
 	"github.com/codenotary/immudb/pkg/stream"
 )
@@ -476,6 +475,9 @@ type ImmuClient interface {
 	// ReplicateTx sends a previously serialized transaction object replicating it on another database.
 	ReplicateTx(ctx context.Context) (schema.ImmuService_ReplicateTxClient, error)
 
+	// StreamExportTx provides a bidirectional endpoint for retrieving serialized transactions
+	StreamExportTx(ctx context.Context, opts ...grpc.CallOption) (schema.ImmuService_StreamExportTxClient, error)
+
 	// SQLExec performs a modifying SQL query within the transaction.
 	// Such query does not return SQL result.
 	SQLExec(ctx context.Context, sql string, params map[string]interface{}) (*schema.SQLExecResult, error)
@@ -504,8 +506,16 @@ type ImmuClient interface {
 	// NewTx starts a new transaction.
 	//
 	// Note: Currently such transaction can only be used for SQL operations.
-	NewTx(ctx context.Context) (Tx, error)
+	NewTx(ctx context.Context, opts ...TxOption) (Tx, error)
+
+	// TruncateDatabase truncates a database.
+	// This truncates the locally stored value log files used by the database.
+	//
+	// This call requires SysAdmin permission level or admin permission to the database.
+	TruncateDatabase(ctx context.Context, db string, retentionPeriod time.Duration) error
 }
+
+type ErrorHandler func(sessionID string, err error)
 
 const DefaultDB = "defaultdb"
 
@@ -520,7 +530,8 @@ type immuClient struct {
 	serverSigningPubKey  *ecdsa.PublicKey
 	StreamServiceFactory stream.ServiceFactory
 	SessionID            string
-	HeartBeater          heartbeater.HeartBeater
+	HeartBeater          HeartBeater
+	errorHandler         ErrorHandler
 }
 
 // Ensure immuClient implements the ImmuClient interface
@@ -563,6 +574,7 @@ func NewImmuClient(options *Options) (*immuClient, error) {
 	}
 
 	options.DialOptions = c.SetupDialOptions(options)
+
 	if db, err := c.Tkns.GetDatabase(); err == nil && len(db) > 0 {
 		options.CurrentDatabase = db
 	}
@@ -703,10 +715,12 @@ func (c *immuClient) SetupDialOptions(options *Options) []grpc.DialOption {
 //
 // Deprecated: use NewClient and OpenSession instead.
 func (c *immuClient) Connect(ctx context.Context) (clientConn *grpc.ClientConn, err error) {
+	c.Logger.Debugf("dialed %v", c.Options)
+
 	if c.clientConn, err = grpc.Dial(c.Options.Bind(), c.Options.DialOptions...); err != nil {
-		c.Logger.Debugf("dialed %v", c.Options)
 		return nil, err
 	}
+
 	return c.clientConn, nil
 }
 
@@ -1184,12 +1198,9 @@ func (c *immuClient) verifiedGet(ctx context.Context, kReq *schema.KeyRequest) (
 	}
 
 	if c.serverSigningPubKey != nil {
-		ok, err := newState.CheckSignature(c.serverSigningPubKey)
+		err := newState.CheckSignature(c.serverSigningPubKey)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, store.ErrCorruptedData
 		}
 	}
 
@@ -1249,16 +1260,16 @@ func (c *immuClient) set(ctx context.Context, key []byte, md *schema.KVMetadata,
 		return nil, errors.FromError(ErrNotConnected)
 	}
 
-	txmd, err := c.ServiceClient.Set(ctx, &schema.SetRequest{KVs: []*schema.KeyValue{{Key: key, Metadata: md, Value: value}}})
+	hdr, err := c.ServiceClient.Set(ctx, &schema.SetRequest{KVs: []*schema.KeyValue{{Key: key, Metadata: md, Value: value}}})
 	if err != nil {
 		return nil, err
 	}
 
-	if int(txmd.Nentries) != 1 {
+	if int(hdr.Nentries) != 1 {
 		return nil, store.ErrCorruptedData
 	}
 
-	return txmd, nil
+	return hdr, nil
 }
 
 // VerifiedSet commits a change of a value for a single key.
@@ -1365,12 +1376,9 @@ func (c *immuClient) VerifiedSet(ctx context.Context, key []byte, value []byte) 
 	}
 
 	if c.serverSigningPubKey != nil {
-		ok, err := newState.CheckSignature(c.serverSigningPubKey)
+		err := newState.CheckSignature(c.serverSigningPubKey)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, store.ErrCorruptedData
 		}
 	}
 
@@ -1403,16 +1411,16 @@ func (c *immuClient) SetAll(ctx context.Context, req *schema.SetRequest) (*schem
 		return nil, errors.FromError(ErrNotConnected)
 	}
 
-	txmd, err := c.ServiceClient.Set(ctx, req)
+	hdr, err := c.ServiceClient.Set(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if int(txmd.Nentries) != len(req.KVs) {
+	if int(hdr.Nentries) != len(req.KVs) {
 		return nil, store.ErrCorruptedData
 	}
 
-	return txmd, nil
+	return hdr, nil
 }
 
 // ExecAll performs multiple write operations (values, references, sorted set entries)
@@ -1561,12 +1569,9 @@ func (c *immuClient) VerifiedTxByID(ctx context.Context, tx uint64) (*schema.Tx,
 	}
 
 	if c.serverSigningPubKey != nil {
-		ok, err := newState.CheckSignature(c.serverSigningPubKey)
+		err := newState.CheckSignature(c.serverSigningPubKey)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, store.ErrCorruptedData
 		}
 	}
 
@@ -1745,12 +1750,9 @@ func (c *immuClient) VerifiedSetReferenceAt(ctx context.Context, key []byte, ref
 	}
 
 	if c.serverSigningPubKey != nil {
-		ok, err := newState.CheckSignature(c.serverSigningPubKey)
+		err := newState.CheckSignature(c.serverSigningPubKey)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, store.ErrCorruptedData
 		}
 	}
 
@@ -1780,7 +1782,7 @@ func (c *immuClient) ZAddAt(ctx context.Context, set []byte, score float64, key 
 	start := time.Now()
 	defer c.Logger.Debugf("zadd finished in %s", time.Since(start))
 
-	txmd, err := c.ServiceClient.ZAdd(ctx, &schema.ZAddRequest{
+	hdr, err := c.ServiceClient.ZAdd(ctx, &schema.ZAddRequest{
 		Set:      set,
 		Score:    score,
 		Key:      key,
@@ -1791,11 +1793,11 @@ func (c *immuClient) ZAddAt(ctx context.Context, set []byte, score float64, key 
 		return nil, err
 	}
 
-	if int(txmd.Nentries) != 1 {
+	if int(hdr.Nentries) != 1 {
 		return nil, store.ErrCorruptedData
 	}
 
-	return txmd, nil
+	return hdr, nil
 }
 
 // VerifiedZAdd adds a new entry to sorted set.
@@ -1918,12 +1920,9 @@ func (c *immuClient) VerifiedZAddAt(ctx context.Context, set []byte, score float
 	}
 
 	if c.serverSigningPubKey != nil {
-		ok, err := newState.CheckSignature(c.serverSigningPubKey)
+		err := newState.CheckSignature(c.serverSigningPubKey)
 		if err != nil {
 			return nil, err
-		}
-		if !ok {
-			return nil, store.ErrCorruptedData
 		}
 	}
 
@@ -2287,33 +2286,28 @@ func (c *immuClient) DatabaseListV2(ctx context.Context) (*schema.DatabaseListRe
 	return c.ServiceClient.DatabaseListV2(ctx, &schema.DatabaseListRequestV2{})
 }
 
-// Deprecated: Please use CurrentState.
-func (c *immuClient) CurrentRoot(ctx context.Context) (*schema.ImmutableState, error) {
-	return c.CurrentState(ctx)
-}
-
-// Deprecated: Please use VerifiedSet.
-func (c *immuClient) SafeSet(ctx context.Context, key []byte, value []byte) (*schema.TxHeader, error) {
-	return c.VerifiedSet(ctx, key, value)
-}
-
-// Deprecated: Please use VerifiedGet.
-func (c *immuClient) SafeGet(ctx context.Context, key []byte, opts ...grpc.CallOption) (*schema.Entry, error) {
-	return c.VerifiedGet(ctx, key)
-}
-
-// Deprecated: Please use VerifiedZAdd.
-func (c *immuClient) SafeZAdd(ctx context.Context, set []byte, score float64, key []byte) (*schema.TxHeader, error) {
-	return c.VerifiedZAdd(ctx, set, score, key)
-}
-
-// Deprecated: Please use VerifiedSetReference.
-func (c *immuClient) SafeReference(ctx context.Context, key []byte, referencedKey []byte) (*schema.TxHeader, error) {
-	return c.VerifiedSetReference(ctx, key, referencedKey)
-}
-
 func decodeTxEntries(entries []*schema.TxEntry) {
 	for _, it := range entries {
 		it.Key = it.Key[1:]
 	}
+}
+
+// TruncateDatabase truncates the database to the given retention period.
+func (c *immuClient) TruncateDatabase(ctx context.Context, db string, retentionPeriod time.Duration) error {
+	start := time.Now()
+
+	if !c.IsConnected() {
+		return ErrNotConnected
+	}
+
+	in := &schema.TruncateDatabaseRequest{
+		Database:        db,
+		RetentionPeriod: retentionPeriod.Milliseconds(),
+	}
+
+	_, err := c.ServiceClient.TruncateDatabase(ctx, in)
+
+	c.Logger.Debugf("TruncateDatabase finished in %s", time.Since(start))
+
+	return err
 }

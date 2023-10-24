@@ -16,7 +16,10 @@ limitations under the License.
 
 package sql
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type projectedRowReader struct {
 	rowReader RowReader
@@ -26,17 +29,16 @@ type projectedRowReader struct {
 	selectors []Selector
 }
 
-func newProjectedRowReader(rowReader RowReader, tableAlias string, selectors []Selector) (*projectedRowReader, error) {
+func newProjectedRowReader(ctx context.Context, rowReader RowReader, tableAlias string, selectors []Selector) (*projectedRowReader, error) {
 	// case: SELECT *
 	if len(selectors) == 0 {
-		cols, err := rowReader.Columns()
+		cols, err := rowReader.Columns(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, col := range cols {
 			sel := &ColSelector{
-				db:    col.Database,
 				table: col.Table,
 				col:   col.Column,
 			}
@@ -59,10 +61,6 @@ func (pr *projectedRowReader) Tx() *SQLTx {
 	return pr.rowReader.Tx()
 }
 
-func (pr *projectedRowReader) Database() string {
-	return pr.rowReader.Database()
-}
-
 func (pr *projectedRowReader) TableAlias() string {
 	if pr.tableAlias == "" {
 		return pr.rowReader.TableAlias()
@@ -79,8 +77,8 @@ func (pr *projectedRowReader) ScanSpecs() *ScanSpecs {
 	return pr.rowReader.ScanSpecs()
 }
 
-func (pr *projectedRowReader) Columns() ([]ColDescriptor, error) {
-	colsBySel, err := pr.colsBySelector()
+func (pr *projectedRowReader) Columns(ctx context.Context) ([]ColDescriptor, error) {
+	colsBySel, err := pr.colsBySelector(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +86,9 @@ func (pr *projectedRowReader) Columns() ([]ColDescriptor, error) {
 	colsByPos := make([]ColDescriptor, len(pr.selectors))
 
 	for i, sel := range pr.selectors {
-		aggFn, db, table, col := sel.resolve(pr.rowReader.Database(), pr.rowReader.TableAlias())
+		aggFn, table, col := sel.resolve(pr.rowReader.TableAlias())
 
 		if pr.tableAlias != "" {
-			db = pr.Database()
 			table = pr.tableAlias
 		}
 
@@ -108,10 +105,9 @@ func (pr *projectedRowReader) Columns() ([]ColDescriptor, error) {
 		}
 
 		colsByPos[i] = ColDescriptor{
-			AggFn:    aggFn,
-			Database: db,
-			Table:    table,
-			Column:   col,
+			AggFn:  aggFn,
+			Table:  table,
+			Column: col,
 		}
 
 		encSel := colsByPos[i].Selector()
@@ -122,8 +118,8 @@ func (pr *projectedRowReader) Columns() ([]ColDescriptor, error) {
 	return colsByPos, nil
 }
 
-func (pr *projectedRowReader) colsBySelector() (map[string]ColDescriptor, error) {
-	dsColDescriptors, err := pr.rowReader.colsBySelector()
+func (pr *projectedRowReader) colsBySelector(ctx context.Context) (map[string]ColDescriptor, error) {
+	dsColDescriptors, err := pr.rowReader.colsBySelector(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +127,9 @@ func (pr *projectedRowReader) colsBySelector() (map[string]ColDescriptor, error)
 	colDescriptors := make(map[string]ColDescriptor, len(pr.selectors))
 
 	for i, sel := range pr.selectors {
-		aggFn, db, table, col := sel.resolve(pr.rowReader.Database(), pr.rowReader.TableAlias())
+		aggFn, table, col := sel.resolve(pr.rowReader.TableAlias())
 
-		encSel := EncodeSelector(aggFn, db, table, col)
+		encSel := EncodeSelector(aggFn, table, col)
 
 		colDesc, ok := dsColDescriptors[encSel]
 		if !ok {
@@ -141,7 +137,6 @@ func (pr *projectedRowReader) colsBySelector() (map[string]ColDescriptor, error)
 		}
 
 		if pr.tableAlias != "" {
-			db = pr.Database()
 			table = pr.tableAlias
 		}
 
@@ -158,11 +153,10 @@ func (pr *projectedRowReader) colsBySelector() (map[string]ColDescriptor, error)
 		}
 
 		des := ColDescriptor{
-			AggFn:    aggFn,
-			Database: db,
-			Table:    table,
-			Column:   col,
-			Type:     colDesc.Type,
+			AggFn:  aggFn,
+			Table:  table,
+			Column: col,
+			Type:   colDesc.Type,
 		}
 
 		colDescriptors[des.Selector()] = des
@@ -171,20 +165,16 @@ func (pr *projectedRowReader) colsBySelector() (map[string]ColDescriptor, error)
 	return colDescriptors, nil
 }
 
-func (pr *projectedRowReader) InferParameters(params map[string]SQLValueType) error {
-	return pr.rowReader.InferParameters(params)
+func (pr *projectedRowReader) InferParameters(ctx context.Context, params map[string]SQLValueType) error {
+	return pr.rowReader.InferParameters(ctx, params)
 }
 
 func (pr *projectedRowReader) Parameters() map[string]interface{} {
 	return pr.rowReader.Parameters()
 }
 
-func (pr *projectedRowReader) SetParameters(params map[string]interface{}) error {
-	return pr.rowReader.SetParameters(params)
-}
-
-func (pr *projectedRowReader) Read() (*Row, error) {
-	row, err := pr.rowReader.Read()
+func (pr *projectedRowReader) Read(ctx context.Context) (*Row, error) {
+	row, err := pr.rowReader.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -195,9 +185,9 @@ func (pr *projectedRowReader) Read() (*Row, error) {
 	}
 
 	for i, sel := range pr.selectors {
-		aggFn, db, table, col := sel.resolve(pr.rowReader.Database(), pr.rowReader.TableAlias())
+		aggFn, table, col := sel.resolve(pr.rowReader.TableAlias())
 
-		encSel := EncodeSelector(aggFn, db, table, col)
+		encSel := EncodeSelector(aggFn, table, col)
 
 		val, ok := row.ValuesBySelector[encSel]
 		if !ok {
@@ -205,7 +195,6 @@ func (pr *projectedRowReader) Read() (*Row, error) {
 		}
 
 		if pr.tableAlias != "" {
-			db = pr.Database()
 			table = pr.tableAlias
 		}
 
@@ -222,7 +211,7 @@ func (pr *projectedRowReader) Read() (*Row, error) {
 		}
 
 		prow.ValuesByPosition[i] = val
-		prow.ValuesBySelector[EncodeSelector(aggFn, db, table, col)] = val
+		prow.ValuesBySelector[EncodeSelector(aggFn, table, col)] = val
 	}
 
 	return prow, nil

@@ -25,6 +25,7 @@ import "protoc-gen-swagger/options/annotations.proto";
 
 option go_package = "github.com/codenotary/immudb/pkg/api/schema";
 option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
+  base_path: "/api",
   info: {
     title: "immudb REST API";
     description: "<b>IMPORTANT</b>: All <code>get</code> and <code>safeget</code> functions return <u>base64-encoded</u> keys and values, while all <code>set</code> and <code>safeset</code> functions expect <u>base64-encoded</u> inputs."
@@ -161,14 +162,14 @@ message OpenSessionResponse {
 message Precondition {
   // Only succeed if given key exists
   message KeyMustExistPrecondition {
-	// key to check
-    bytes key = 1; 
+    // key to check
+    bytes key = 1;
   }
 
   // Only succeed if given key does not exists
   message KeyMustNotExistPrecondition {
-	// key to check
-    bytes key = 1; 
+    // key to check
+    bytes key = 1;
   }
 
   // Only succeed if given key was not modified after given transaction
@@ -306,7 +307,7 @@ message ScanRequest {
   // indexed, newer transaction may still be pending
   uint64 sinceTx = 5;
 
-  // If set to true, do not wait for indexing to be done before finishing this call
+  // Deprecated: If set to true, do not wait for indexing to be done before finishing this call
   bool noWait = 6;
 
   // If set to true, results will include seekKey
@@ -365,7 +366,12 @@ message TxHeader {
 }
 
 // TxMetadata contains metadata set to whole transaction
-message TxMetadata {}
+message TxMetadata {
+  // Entry expiration information
+  uint64 truncatedTxID = 1;
+  // Extra data
+  bytes extra = 2;
+}
 
 // LinearProof contains the linear part of the proof (outside the main Merkle Tree)
 message LinearProof {
@@ -414,6 +420,21 @@ message DualProof {
 
   // Proof of consistency between some part of older linear chain and newer Merkle Tree
   LinearAdvanceProof LinearAdvanceProof = 8;
+}
+
+// DualProofV2 contains inclusion and consistency proofs
+message DualProofV2 {
+  // Header of the source (earlier) transaction
+  TxHeader sourceTxHeader = 1;
+
+  // Header of the target (latter) transaction
+  TxHeader targetTxHeader = 2;
+
+  // Inclusion proof of the source transaction hash in the main Merkle Tree
+  repeated bytes inclusionProof = 3;
+
+  // Consistency proof between Merkle Trees in the source and target transactions
+  repeated bytes consistencyProof = 4;
 }
 
 message Tx {
@@ -470,6 +491,17 @@ message VerifiableTx {
 
   // Proof for the transaction
   DualProof dualProof = 2;
+
+  // Signature for the new state value
+  Signature signature = 3;
+}
+
+message VerifiableTxV2 {
+  // Transaction to verify
+  Tx tx = 1;
+
+  // Proof for the transaction
+  DualProofV2 dualProof = 2;
 
   // Signature for the new state value
   Signature signature = 3;
@@ -603,14 +635,14 @@ message ImmutableState {
 
   // Signature of the hash
   Signature signature = 4;
-	
+
   // following fields are not part of the signature
 
   // Id of the most recent precommitted transaction
-	uint64 precommittedTxId = 5;
+  uint64 precommittedTxId = 5;
 
   // State of the most recent precommitted transaction
-	bytes precommittedTxHash = 6;
+  bytes precommittedTxHash = 6;
 }
 
 message ReferenceRequest {
@@ -702,7 +734,7 @@ message ZScanRequest {
   // entries up to sinceTx to be indexed
   uint64 sinceTx = 10;
 
-  // If set to true, do not wait for the indexer to be up to date
+  // Deprecated: If set to true, do not wait for the indexer to be up to date
   bool noWait = 11;
 
   // Specify the index of initial entry to be returned by excluding the initial
@@ -747,7 +779,7 @@ message TxRequest {
   // entries up to sinceTx to be indexed, will affect resolving references
   uint64 sinceTx = 3;
 
-  // If set to true, do not wait for the indexer to be up to date
+  // Deprecated: If set to true, do not wait for the indexer to be up to date
   bool noWait = 4;
 
   // If set to true, do not resolve references (avoid looking up final values if not needed)
@@ -799,7 +831,7 @@ message VerifiableTxRequest {
   // entries up to sinceTx to be indexed, will affect resolving references
   uint64 sinceTx = 4;
 
-  // If set to true, do not wait for the indexer to be up to date
+  // Deprecated: If set to true, do not wait for the indexer to be up to date
   bool noWait = 5;
 
   // If set to true, do not resolve references (avoid looking up final values if not needed)
@@ -823,7 +855,7 @@ message TxScanRequest {
   // entries up to sinceTx to be indexed, will affect resolving references
   uint64 sinceTx = 5;
 
-  // If set to true, do not wait for the indexer to be up to date
+  // Deprecated: If set to true, do not wait for the indexer to be up to date
   bool noWait = 6;
 }
 
@@ -834,19 +866,21 @@ message TxList {
 
 message ExportTxRequest {
   // Id of transaction to export
-	uint64 tx = 1;
+  uint64 tx = 1;
   // If set to true, non-committed transactions can be exported
-	bool allowPreCommitted = 2;
+  bool allowPreCommitted = 2;
   // Used on synchronous replication to notify the primary about replica state
-	ReplicaState replicaState = 3;
+  ReplicaState replicaState = 3;
+  // If set to true, integrity checks are skipped when reading data
+  bool skipIntegrityCheck = 4;
 }
 
 message ReplicaState {
-	string UUID = 1;
-	uint64 committedTxID = 2;
-	bytes  committedAlh = 3;
-	uint64 precommittedTxID = 4;
-	bytes  precommittedAlh = 5;
+  string UUID = 1;
+  uint64 committedTxID = 2;
+  bytes committedAlh = 3;
+  uint64 precommittedTxID = 4;
+  bytes precommittedAlh = 5;
 }
 
 message Database {
@@ -1022,6 +1056,24 @@ message DatabaseNullableSettings {
 
   // Settings of Appendable Hash Tree
   AHTNullableSettings ahtSettings = 25;
+
+  // Maximum number of pre-committed transactions
+  NullableUint32 maxActiveTransactions = 26;
+
+  // Limit the number of read entries per transaction
+  NullableUint32 mvccReadSetLimit = 27;
+
+  // Size of the LRU cache for value logs
+  NullableUint32 vLogCacheSize = 28;
+
+  // Truncation settings
+  TruncationNullableSettings truncationSettings = 29;
+
+  // If set to true, values are stored together with the transaction header (true by default)
+  NullableBool embeddedValues = 30;
+
+  // Enable file preallocation
+  NullableBool preallocFiles = 31;
 }
 
 message ReplicationNullableSettings {
@@ -1056,7 +1108,21 @@ message ReplicationNullableSettings {
   NullableUint32 replicationCommitConcurrency = 10;
 
   // Allow precommitted transactions to be discarded if the replica diverges from the primary
-  NullableBool AllowTxDiscarding = 11;
+  NullableBool allowTxDiscarding = 11;
+
+  // Disable integrity check when reading data during replication
+  NullableBool skipIntegrityCheck = 12;
+
+  // Wait for indexing to be up to date during replication
+  NullableBool waitForIndexing = 13;
+}
+
+message TruncationNullableSettings {
+  // Retention Period for data in the database
+  NullableMilliseconds retentionPeriod = 1;
+
+  // Truncation Frequency for the database
+  NullableMilliseconds truncationFrequency = 2;
 }
 
 message IndexNullableSettings {
@@ -1098,6 +1164,12 @@ message IndexNullableSettings {
 
   // Percentage of node files cleaned up during each flush
   NullableFloat cleanupPercentage = 13;
+
+  // Maximum number of transactions indexed together
+  NullableUint32 maxBulkSize = 14;
+
+  // Maximum time waiting for more transactions to be committed and included into the same bulk
+  NullableMilliseconds bulkPreparationTimeout = 15;
 }
 
 message AHTNullableSettings {
@@ -1227,6 +1299,9 @@ message VerifiableSQLEntry {
 
   // Mapping of column IDs to their length constraints
   map<uint32, int32> ColLenById = 11;
+
+  // Variable is used to assign unique ids to new columns as they are created
+  uint32 MaxColId = 12;
 }
 
 message UseDatabaseReply {
@@ -1289,6 +1364,7 @@ message DatabaseWithSettings {
 
 message Chunk {
   bytes content = 1;
+  map<string, bytes> metadata = 2;
 }
 
 message UseSnapshotRequest {
@@ -1380,6 +1456,7 @@ message SQLValue {
     bool b = 4;
     bytes bs = 5;
     int64 ts = 6;
+    double f = 7;
   }
 }
 
@@ -1397,6 +1474,13 @@ enum TxMode {
 message NewTxRequest {
   // Transaction mode
   TxMode mode = 1;
+  // An existing snapshot may be reused as long as it includes the specified transaction
+  // If not specified it will include up to the latest precommitted transaction
+  NullableUint64 snapshotMustIncludeTxID = 2;
+  // An existing snapshot may be reused as long as it is not older than the specified timeframe
+  NullableMilliseconds snapshotRenewalPeriod = 3;
+  // Indexing may not be up to date when doing MVCC
+  bool unsafeMVCC = 4;
 }
 
 message NewTxResponse {
@@ -1420,6 +1504,19 @@ message DebugInfo {
 message RetryInfo {
   // Number of milliseconds after which the request can be retried
   int32 retry_delay = 1;
+}
+
+message TruncateDatabaseRequest {
+  // Database name
+  string database = 1;
+
+  // Retention Period of data
+  int64 retentionPeriod = 2;
+}
+
+message TruncateDatabaseResponse {
+  // Database name
+  string database = 1;
 }
 
 // immudb gRPC & REST service
@@ -1804,6 +1901,8 @@ service ImmuService {
 
   rpc replicateTx(stream Chunk) returns (TxHeader) {}
 
+  rpc streamExportTx(stream ExportTxRequest) returns (stream Chunk) {}
+
   rpc SQLExec(SQLExecRequest) returns (SQLExecResult) {
     option (google.api.http) = {
       post: "/db/sqlexec"
@@ -1834,6 +1933,13 @@ service ImmuService {
   rpc VerifiableSQLGet(VerifiableSQLGetRequest) returns (VerifiableSQLEntry) {
     option (google.api.http) = {
       post: "/db/verifiable/sqlget"
+      body: "*"
+    };
+  }
+
+  rpc TruncateDatabase(TruncateDatabaseRequest) returns (TruncateDatabaseResponse) {
+    option (google.api.http) = {
+      post: "/db/truncate"
       body: "*"
     };
   }

@@ -7,7 +7,6 @@ import (
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/pkg/client/cache"
 	"github.com/codenotary/immudb/pkg/client/errors"
-	"github.com/codenotary/immudb/pkg/client/heartbeater"
 	"github.com/codenotary/immudb/pkg/client/state"
 	"github.com/codenotary/immudb/pkg/signer"
 	"github.com/codenotary/immudb/pkg/stream"
@@ -80,7 +79,7 @@ func (c *immuClient) OpenSession(ctx context.Context, user []byte, pass []byte, 
 	c.Options.DialOptions = dialOptions
 	c.SessionID = resp.GetSessionID()
 
-	c.HeartBeater = heartbeater.NewHeartBeater(c.SessionID, c.ServiceClient, c.Options.HeartBeatFrequency)
+	c.HeartBeater = NewHeartBeater(c.SessionID, c.ServiceClient, c.Options.HeartBeatFrequency, c.errorHandler, c.Logger)
 	c.HeartBeater.KeepAlive(context.Background())
 
 	c.WithStateService(stateService)
@@ -101,6 +100,10 @@ func (c *immuClient) CloseSession(ctx context.Context) error {
 	defer func() {
 		c.SessionID = ""
 		c.clientConn = nil
+		c.ServiceClient = nil
+		c.StateService = nil
+		c.serverSigningPubKey = nil
+		c.HeartBeater = nil
 	}()
 
 	c.HeartBeater.Stop()

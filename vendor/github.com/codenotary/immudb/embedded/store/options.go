@@ -24,11 +24,12 @@ import (
 	"github.com/codenotary/immudb/embedded/ahtree"
 	"github.com/codenotary/immudb/embedded/appendable"
 	"github.com/codenotary/immudb/embedded/appendable/multiapp"
+	"github.com/codenotary/immudb/embedded/logger"
 	"github.com/codenotary/immudb/embedded/tbtree"
-	"github.com/codenotary/immudb/pkg/logger"
 )
 
 const DefaultMaxActiveTransactions = 1000
+const DefaultMVCCReadSetLimit = 100_000
 const DefaultMaxConcurrency = 30
 const DefaultMaxIOConcurrency = 1
 const DefaultMaxTxEntries = 1 << 10 // 1024
@@ -39,13 +40,21 @@ const DefaultFileMode = os.FileMode(0755)
 const DefaultFileSize = multiapp.DefaultFileSize
 const DefaultCompressionFormat = appendable.DefaultCompressionFormat
 const DefaultCompressionLevel = appendable.DefaultCompressionLevel
+const DefaultEmbeddedValues = false
+const DefaultPreallocFiles = false
 const DefaultTxLogCacheSize = 1000
+const DefaultVLogCacheSize = 0
 const DefaultMaxWaitees = 1000
 const DefaultVLogMaxOpenedFiles = 10
 const DefaultTxLogMaxOpenedFiles = 10
 const DefaultCommitLogMaxOpenedFiles = 10
 const DefaultWriteTxHeaderVersion = MaxTxHeaderVersion
 const DefaultWriteBufferSize = 1 << 22 //4Mb
+const DefaultIndexingMaxBulkSize = 1
+const DefaultBulkPreparationTimeout = DefaultSyncFrequency
+const DefaultTruncationFrequency = 24 * time.Hour
+const MinimumRetentionPeriod = 24 * time.Hour
+const MinimumTruncationFrequency = 1 * time.Hour
 
 const MaxFileSize = (1 << 31) - 1 // 2Gb
 
@@ -60,35 +69,61 @@ type TimeFunc func() time.Time
 type Options struct {
 	ReadOnly bool
 
-	Synced        bool
+	// Fsync during commit process
+	Synced bool
+
+	// Fsync frequency during commit process
 	SyncFrequency time.Duration
 
+	// Size of the in-memory buffer for write operations
 	WriteBufferSize int
 
 	FileMode os.FileMode
 
 	logger logger.Logger
 
-	appFactory         AppFactoryFunc
+	appFactory AppFactoryFunc
+
 	CompactionDisabled bool
 
+	// Maximum number of pre-committed transactions
 	MaxActiveTransactions int
 
-	MaxConcurrency   int
+	// Limit the number of read entries per transaction
+	MVCCReadSetLimit int
+
+	// Maximum number of simultaneous commits prepared for write
+	MaxConcurrency int
+
+	// Maximum number of simultaneous IO writes
 	MaxIOConcurrency int
 
+	// Size of the LRU cache for transaction logs
 	TxLogCacheSize int
 
-	VLogMaxOpenedFiles      int
-	TxLogMaxOpenedFiles     int
-	CommitLogMaxOpenedFiles int
-	WriteTxHeaderVersion    int
+	// Maximum number of simultaneous value files opened
+	VLogMaxOpenedFiles int
 
+	// Size of the LRU cache for value logs
+	VLogCacheSize int
+
+	// Maximum number of simultaneous transaction log files opened
+	TxLogMaxOpenedFiles int
+
+	// Maximum number of simultaneous commit log files opened
+	CommitLogMaxOpenedFiles int
+
+	// Version of transaction header to use (limits available features)
+	WriteTxHeaderVersion int
+
+	// Maximum number of go-routines waiting for specific transactions to be in a committed or indexed state
 	MaxWaitees int
 
 	TimeFunc TimeFunc
 
 	UseExternalCommitAllowance bool
+
+	MultiIndexing bool
 
 	// options below are only set during initialization and stored as metadata
 	MaxTxEntries      int
@@ -97,6 +132,8 @@ type Options struct {
 	FileSize          int
 	CompressionFormat int
 	CompressionLevel  int
+	EmbeddedValues    bool
+	PreallocFiles     bool
 
 	// options below affect indexing
 	IndexOpts *IndexOptions
@@ -106,23 +143,57 @@ type Options struct {
 }
 
 type IndexOptions struct {
-	CacheSize                int
-	FlushThld                int
-	SyncThld                 int
-	FlushBufferSize          int
-	CleanupPercentage        float32
-	MaxActiveSnapshots       int
-	MaxNodeSize              int
-	RenewSnapRootAfter       time.Duration
-	CompactionThld           int
-	DelayDuringCompaction    time.Duration
-	NodesLogMaxOpenedFiles   int
+	// Size of the Btree node LRU cache
+	CacheSize int
+
+	// Number of new index entries between disk flushes
+	FlushThld int
+
+	// Number of new index entries between disk flushes with file sync
+	SyncThld int
+
+	// Size of the in-memory flush buffer (in bytes)
+	FlushBufferSize int
+
+	// Percentage of node files cleaned up during each flush
+	CleanupPercentage float32
+
+	// Maximum number of active btree snapshots
+	MaxActiveSnapshots int
+
+	// Max size of a single Btree node in bytes
+	MaxNodeSize int
+
+	// Time between the most recent DB snapshot is automatically renewed
+	RenewSnapRootAfter time.Duration
+
+	// Minimum number of updates entries in the btree to allow for full compaction
+	CompactionThld int
+
+	// Additional delay added during indexing when full compaction is in progress
+	DelayDuringCompaction time.Duration
+
+	// Maximum number of simultaneously opened nodes files
+	NodesLogMaxOpenedFiles int
+
+	// Maximum number of simultaneously opened node history files
 	HistoryLogMaxOpenedFiles int
-	CommitLogMaxOpenedFiles  int
+
+	// Maximum number of simultaneously opened commit log files
+	CommitLogMaxOpenedFiles int
+
+	// Maximum number of transactions indexed together
+	MaxBulkSize int
+
+	// Maximum time waiting for more transactions to be committed and included into the same bulk
+	BulkPreparationTimeout time.Duration
 }
 
 type AHTOptions struct {
-	SyncThld        int
+	// Number of new leaves in the tree between synchronous flush to disk
+	SyncThld int
+
+	// Size of the in-memory write buffer
 	WriteBufferSize int
 }
 
@@ -136,11 +207,13 @@ func DefaultOptions() *Options {
 		logger:          logger.NewSimpleLogger("immudb ", os.Stderr),
 
 		MaxActiveTransactions: DefaultMaxActiveTransactions,
+		MVCCReadSetLimit:      DefaultMVCCReadSetLimit,
 
 		MaxConcurrency:   DefaultMaxConcurrency,
 		MaxIOConcurrency: DefaultMaxIOConcurrency,
 
 		TxLogCacheSize: DefaultTxLogCacheSize,
+		VLogCacheSize:  DefaultVLogCacheSize,
 
 		VLogMaxOpenedFiles:      DefaultVLogMaxOpenedFiles,
 		TxLogMaxOpenedFiles:     DefaultTxLogMaxOpenedFiles,
@@ -161,6 +234,8 @@ func DefaultOptions() *Options {
 		FileSize:          DefaultFileSize,
 		CompressionFormat: DefaultCompressionFormat,
 		CompressionLevel:  DefaultCompressionLevel,
+		EmbeddedValues:    DefaultEmbeddedValues,
+		PreallocFiles:     DefaultPreallocFiles,
 
 		IndexOpts: DefaultIndexOptions(),
 
@@ -183,6 +258,9 @@ func DefaultIndexOptions() *IndexOptions {
 		NodesLogMaxOpenedFiles:   tbtree.DefaultNodesLogMaxOpenedFiles,
 		HistoryLogMaxOpenedFiles: tbtree.DefaultHistoryLogMaxOpenedFiles,
 		CommitLogMaxOpenedFiles:  tbtree.DefaultCommitLogMaxOpenedFiles,
+
+		MaxBulkSize:            DefaultIndexingMaxBulkSize,
+		BulkPreparationTimeout: DefaultBulkPreparationTimeout,
 	}
 }
 
@@ -209,11 +287,17 @@ func (opts *Options) Validate() error {
 		return fmt.Errorf("%w: invalid MaxActiveTransactions", ErrInvalidOptions)
 	}
 
+	if opts.MVCCReadSetLimit <= 0 {
+		return fmt.Errorf("%w: invalid MVCCReadSetLimit", ErrInvalidOptions)
+	}
+
 	if opts.MaxConcurrency <= 0 {
 		return fmt.Errorf("%w: invalid MaxConcurrency", ErrInvalidOptions)
 	}
 
-	if opts.MaxIOConcurrency <= 0 || opts.MaxIOConcurrency > MaxParallelIO {
+	if opts.MaxIOConcurrency <= 0 ||
+		opts.MaxIOConcurrency > MaxParallelIO ||
+		(opts.MaxIOConcurrency > 1 && opts.EmbeddedValues) {
 		return fmt.Errorf("%w: invalid MaxIOConcurrency", ErrInvalidOptions)
 	}
 
@@ -227,8 +311,12 @@ func (opts *Options) Validate() error {
 		return fmt.Errorf("%w: invalid CommitLogMaxOpenedFiles", ErrInvalidOptions)
 	}
 
-	if opts.TxLogCacheSize < 0 {
+	if opts.TxLogCacheSize <= 0 {
 		return fmt.Errorf("%w: invalid TxLogCacheSize", ErrInvalidOptions)
+	}
+
+	if opts.VLogCacheSize < 0 {
+		return fmt.Errorf("%w: invalid VLogCacheSize", ErrInvalidOptions)
 	}
 
 	if opts.MaxWaitees < 0 {
@@ -305,6 +393,12 @@ func (opts *IndexOptions) Validate() error {
 	if opts.RenewSnapRootAfter < 0 {
 		return fmt.Errorf("%w: invalid index option RenewSnapRootAfter", ErrInvalidOptions)
 	}
+	if opts.MaxBulkSize < 1 {
+		return fmt.Errorf("%w: invalid MaxBulkSize", ErrInvalidOptions)
+	}
+	if opts.BulkPreparationTimeout < 0 {
+		return fmt.Errorf("%w: invalid BulkPreparationTimeout", ErrInvalidOptions)
+	}
 	if opts.NodesLogMaxOpenedFiles <= 0 {
 		return fmt.Errorf("%w: invalid index option NodesLogMaxOpenedFiles", ErrInvalidOptions)
 	}
@@ -377,6 +471,11 @@ func (opts *Options) WithMaxActiveTransactions(maxActiveTransactions int) *Optio
 	return opts
 }
 
+func (opts *Options) WithMVCCReadSetLimit(mvccReadSetLimit int) *Options {
+	opts.MVCCReadSetLimit = mvccReadSetLimit
+	return opts
+}
+
 func (opts *Options) WithMaxConcurrency(maxConcurrency int) *Options {
 	opts.MaxConcurrency = maxConcurrency
 	return opts
@@ -404,6 +503,11 @@ func (opts *Options) WithMaxValueLen(maxValueLen int) *Options {
 
 func (opts *Options) WithTxLogCacheSize(txLogCacheSize int) *Options {
 	opts.TxLogCacheSize = txLogCacheSize
+	return opts
+}
+
+func (opts *Options) WithVLogCacheSize(vLogCacheSize int) *Options {
+	opts.VLogCacheSize = vLogCacheSize
 	return opts
 }
 
@@ -442,6 +546,11 @@ func (opts *Options) WithExternalCommitAllowance(useExternalCommitAllowance bool
 	return opts
 }
 
+func (opts *Options) WithMultiIndexing(multiIndexing bool) *Options {
+	opts.MultiIndexing = multiIndexing
+	return opts
+}
+
 func (opts *Options) WithWriteTxHeaderVersion(version int) *Options {
 	opts.WriteTxHeaderVersion = version
 	return opts
@@ -454,6 +563,16 @@ func (opts *Options) WithCompressionFormat(compressionFormat int) *Options {
 
 func (opts *Options) WithCompresionLevel(compressionLevel int) *Options {
 	opts.CompressionLevel = compressionLevel
+	return opts
+}
+
+func (opts *Options) WithEmbeddedValues(embeddedValues bool) *Options {
+	opts.EmbeddedValues = embeddedValues
+	return opts
+}
+
+func (opts *Options) WithPreallocFiles(preallocFiles bool) *Options {
+	opts.PreallocFiles = preallocFiles
 	return opts
 }
 
@@ -506,6 +625,16 @@ func (opts *IndexOptions) WithMaxNodeSize(maxNodeSize int) *IndexOptions {
 
 func (opts *IndexOptions) WithRenewSnapRootAfter(renewSnapRootAfter time.Duration) *IndexOptions {
 	opts.RenewSnapRootAfter = renewSnapRootAfter
+	return opts
+}
+
+func (opts *IndexOptions) WithMaxBulkSize(maxBulkSize int) *IndexOptions {
+	opts.MaxBulkSize = maxBulkSize
+	return opts
+}
+
+func (opts *IndexOptions) WithBulkPreparationTimeout(bulkPreparationTimeout time.Duration) *IndexOptions {
+	opts.BulkPreparationTimeout = bulkPreparationTimeout
 	return opts
 }
 

@@ -214,7 +214,11 @@ func OpenWith(pLog, dLog, cLog appendable.Appendable, opts *Options) (*AHtree, e
 	pOff := binary.BigEndian.Uint64(b[:])
 	pSize := binary.BigEndian.Uint32(b[offsetSize:])
 
-	t.pLogSize = int64(pOff) + int64(pSize)
+	// pOff denotes the latest payload
+	// pSize denotes the size of the latest payload
+	// as payloads are prefixed with the size when written into pLog
+	// pLogSize is calculated with the offset, the size description of the payload and the payload itself
+	t.pLogSize = int64(pOff) + int64(szSize+pSize)
 
 	pLogFileSize, err := pLog.Size()
 	if err != nil {
@@ -409,7 +413,11 @@ func (t *AHtree) ResetSize(newSize uint64) error {
 		pOff := binary.BigEndian.Uint64(b[:])
 		pSize := binary.BigEndian.Uint32(b[offsetSize:])
 
-		pLogSize = int64(pOff) + int64(pSize)
+		// pOff denotes the latest payload
+		// pSize denotes the size of the latest payload
+		// as payloads are prefixed with the size when written into pLog
+		// pLogSize is calculated with the offset, the size description of the payload and the payload itself
+		pLogSize = int64(pOff) + int64(szSize+pSize)
 
 		pLogFileSize, err := t.pLog.Size()
 		if err != nil {

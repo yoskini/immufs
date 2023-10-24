@@ -14,15 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package heartbeater
+package client
 
 import (
 	"context"
 	stdos "os"
 	"time"
 
+	"github.com/codenotary/immudb/embedded/logger"
 	"github.com/codenotary/immudb/pkg/api/schema"
-	"github.com/codenotary/immudb/pkg/logger"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -30,8 +30,9 @@ type heartBeater struct {
 	sessionID     string
 	logger        logger.Logger
 	serviceClient schema.ImmuServiceClient
-	done          chan bool
+	done          chan struct{}
 	t             *time.Ticker
+	errorHandler  ErrorHandler
 }
 
 type HeartBeater interface {
@@ -39,13 +40,18 @@ type HeartBeater interface {
 	Stop()
 }
 
-func NewHeartBeater(sessionID string, sc schema.ImmuServiceClient, keepAliveInterval time.Duration) *heartBeater {
+func NewHeartBeater(sessionID string, sc schema.ImmuServiceClient, keepAliveInterval time.Duration, errhandler ErrorHandler, l logger.Logger) *heartBeater {
+	if l == nil {
+		l = logger.NewSimpleLogger("immuclient", stdos.Stdout)
+	}
+
 	return &heartBeater{
 		sessionID:     sessionID,
-		logger:        logger.NewSimpleLogger("immuclient", stdos.Stdout),
+		logger:        l,
 		serviceClient: sc,
-		done:          make(chan bool),
+		done:          make(chan struct{}),
 		t:             time.NewTicker(keepAliveInterval),
+		errorHandler:  errhandler,
 	}
 }
 
@@ -61,6 +67,9 @@ func (hb *heartBeater) KeepAlive(ctx context.Context) {
 				err := hb.keepAliveRequest(ctx)
 				if err != nil {
 					hb.logger.Errorf("an error occurred on keep alive %s at %s: %v\n", hb.sessionID, t.String(), err)
+					if hb.errorHandler != nil {
+						hb.errorHandler(hb.sessionID, err)
+					}
 				}
 			}
 		}
@@ -68,7 +77,8 @@ func (hb *heartBeater) KeepAlive(ctx context.Context) {
 }
 
 func (hb *heartBeater) Stop() {
-	hb.done <- true
+	hb.t.Stop()
+	close(hb.done)
 }
 
 func (hb *heartBeater) keepAliveRequest(ctx context.Context) error {

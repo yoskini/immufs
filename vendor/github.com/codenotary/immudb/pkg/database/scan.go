@@ -17,14 +17,17 @@ limitations under the License.
 package database
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/codenotary/immudb/embedded/store"
 	"github.com/codenotary/immudb/pkg/api/schema"
 )
 
 // Scan ...
-func (d *db) Scan(req *schema.ScanRequest) (*schema.Entries, error) {
+func (d *db) Scan(ctx context.Context, req *schema.ScanRequest) (*schema.Entries, error) {
 	d.mutex.RLock()
 	defer d.mutex.RUnlock()
 
@@ -39,32 +42,13 @@ func (d *db) Scan(req *schema.ScanRequest) (*schema.Entries, error) {
 			ErrResultSizeLimitExceeded, req.Limit, d.maxResultSize)
 	}
 
-	waitUntilTx := req.SinceTx
-	if waitUntilTx == 0 {
-		waitUntilTx = currTxID
-	}
-
-	if !req.NoWait {
-		err := d.st.WaitForIndexingUpto(waitUntilTx, nil)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	limit := int(req.Limit)
 
 	if req.Limit == 0 {
 		limit = d.maxResultSize
 	}
 
-	snap, err := d.st.SnapshotSince(waitUntilTx)
-	if err != nil {
-		return nil, err
-	}
-	defer snap.Close()
-
 	seekKey := req.SeekKey
-
 	if len(seekKey) > 0 {
 		seekKey = EncodeKey(req.SeekKey)
 	}
@@ -74,8 +58,14 @@ func (d *db) Scan(req *schema.ScanRequest) (*schema.Entries, error) {
 		endKey = EncodeKey(req.EndKey)
 	}
 
+	snap, err := d.snapshotSince(ctx, []byte{SetKeyPrefix}, req.SinceTx)
+	if err != nil {
+		return nil, err
+	}
+	defer snap.Close()
+
 	r, err := snap.NewKeyReader(
-		&store.KeyReaderSpec{
+		store.KeyReaderSpec{
 			SeekKey:       seekKey,
 			EndKey:        endKey,
 			Prefix:        EncodeKey(req.Prefix),
@@ -93,18 +83,17 @@ func (d *db) Scan(req *schema.ScanRequest) (*schema.Entries, error) {
 	entries := &schema.Entries{}
 
 	for l := 1; l <= limit; l++ {
-		key, valRef, err := r.Read()
-		if err == store.ErrNoMoreEntries {
+		key, valRef, err := r.Read(ctx)
+		if errors.Is(err, store.ErrNoMoreEntries) {
 			break
 		}
 		if err != nil {
 			return nil, err
 		}
 
-		e, err := d.getAtTx(key, valRef.Tx(), 0, snap, valRef.HC())
-		if err == store.ErrKeyNotFound {
-			// ignore deleted ones (referenced key may have been deleted)
-			continue
+		e, err := d.getAtTx(ctx, key, valRef.Tx(), 0, snap, valRef.HC(), true)
+		if errors.Is(err, store.ErrKeyNotFound) || errors.Is(err, io.EOF) {
+			continue // ignore deleted or truncated ones (referenced key may have been deleted or truncated)
 		}
 		if err != nil {
 			return nil, err
